@@ -10,3 +10,6 @@ out/
 # Environment variables
 .env
 .env.local
+
+# Next.js generated files
+next-env.d.ts
