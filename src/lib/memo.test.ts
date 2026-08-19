@@ -1,5 +1,5 @@
 /**
- * Tests for HashDrop Memo Module (V2 only)
+ * Tests for HashDrop Memo Module (V2 only, v1 transactions)
  */
 
 import {
@@ -83,8 +83,16 @@ describe('Memo Module', () => {
       expect(canFitInMemo('Hello, World!')).toBe(true);
     });
 
-    it('should return false for large content', () => {
-      const largeContent = 'x'.repeat(1500);
+    it('should return true for medium content (v1 supports up to ~2800 bytes of raw content)', () => {
+      // With 4096 bytes limit and ~176 bytes overhead, content up to ~2800 bytes should fit
+      // (base64 encoding increases size by ~33%, so 2800 * 4/3 = ~3733 + ~176 = ~3909 < 4096)
+      const mediumContent = 'x'.repeat(2500);
+      expect(canFitInMemo(mediumContent)).toBe(true);
+    });
+
+    it('should return false for large content that exceeds v1 limits', () => {
+      // Content that's too large for v1 (base64 encoding + overhead exceeds 4096)
+      const largeContent = 'x'.repeat(3000);
       expect(canFitInMemo(largeContent)).toBe(false);
     });
 
@@ -93,18 +101,12 @@ describe('Memo Module', () => {
       expect(canFitInMemo(unicodeContent)).toBe(true);
     });
 
-    it('should respect custom max transaction bytes', () => {
-      // With 1232 bytes limit, content should fit
-      expect(canFitInMemo('Hello, World!', 1232)).toBe(true);
-      // With 4096 bytes limit, content up to ~3800 bytes should fit
-      // Note: The actual limit is lower due to memo payload overhead
-      // Memo payload includes: protocol(8) + version(2) + type(4) + hashDropId(7) + 
-      // contentHash(64) + contentType(10) + contentSize(4) + base64Content
-      // Base64 encoding increases size by ~33%, so 3800 bytes of content becomes ~5067 bytes
-      // Plus overhead of ~100 bytes = ~5167 bytes, which exceeds 4096
-      // So we need smaller content for 4096-byte limit
-      const smallerContent = 'x'.repeat(2800);
-      expect(canFitInMemo(smallerContent, 4096)).toBe(true);
+    it('should use v1 transaction limits (4096 bytes)', () => {
+      // With 4096 bytes limit, content should fit
+      expect(canFitInMemo('Hello, World!')).toBe(true);
+      // Content that's too large for v1
+      const largeContent = 'x'.repeat(3000);
+      expect(canFitInMemo(largeContent)).toBe(false);
     });
   });
 
@@ -120,15 +122,9 @@ describe('Memo Module', () => {
   });
 
   describe('getMaxContentSize', () => {
-    it('should calculate max content size for legacy transactions', () => {
-      const maxSize = getMaxContentSize(1232);
-      expect(maxSize).toBeGreaterThan(1000);
-      expect(maxSize).toBeLessThan(1232);
-    });
-
     it('should calculate max content size for v1 transactions', () => {
-      const maxSize = getMaxContentSize(4096);
-      expect(maxSize).toBeGreaterThan(3000);
+      const maxSize = getMaxContentSize();
+      expect(maxSize).toBeGreaterThan(2500);
       expect(maxSize).toBeLessThan(4096);
     });
   });
@@ -136,17 +132,18 @@ describe('Memo Module', () => {
   describe('calculateTransactionSize', () => {
     it('should calculate transaction size correctly', () => {
       const content = 'Hello, HashDrop!';
-      const result = calculateTransactionSize(content, 1232);
+      const result = calculateTransactionSize(content);
       
       expect(result.contentBytes).toBe(content.length);
       expect(result.transactionBytes).toBeGreaterThan(0);
-      expect(result.maxTransactionBytes).toBe(1232);
+      expect(result.maxTransactionBytes).toBe(4096);
       expect(result.availableBytes).toBeGreaterThan(0);
     });
 
     it('should show negative available bytes for content that is too large', () => {
-      const largeContent = 'x'.repeat(1500);
-      const result = calculateTransactionSize(largeContent, 1232);
+      // Content that exceeds v1 transaction limits
+      const largeContent = 'x'.repeat(3000);
+      const result = calculateTransactionSize(largeContent);
       
       expect(result.availableBytes).toBeLessThan(0);
     });

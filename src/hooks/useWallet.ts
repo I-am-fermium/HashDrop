@@ -1,15 +1,17 @@
 /**
  * HashDrop Wallet Hook
  * 
- * Provides wallet connection and transaction utilities for Phantom/Brave wallets
- * Uses direct window.solana API for proper wallet injection
+ * Provides wallet connection and transaction utilities using Solana Kit
+ * Uses Wallet Standard for wallet interactions
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Connection, PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js';
+import { PublicKey, VersionedTransaction, Connection } from '@solana/web3.js';
+import { createSolanaRpc } from '@solana/rpc';
+import type { Rpc } from '@solana/rpc-spec';
+import type { SolanaRpcApi } from '@solana/rpc-api';
 
 import { DEVNET_ENDPOINT, MAINNET_ENDPOINT } from '../lib/constants';
-import { getConnection as getSolanaConnection } from '../lib/solana/networkCost';
 
 // Network configuration
 export const GET_CURRENT_ENDPOINT = (): string => {
@@ -29,30 +31,32 @@ export interface TransactionResult {
 }
 
 export interface UseWalletResult {
-  publicKey: PublicKey | null;
+  publicKey: string | null;
   isConnected: boolean;
   network: 'devnet' | 'mainnet';
   connection: Connection | null;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
-  sendTransaction: (transaction: Transaction | VersionedTransaction) => Promise<TransactionResult>;
+  sendTransaction: (transaction: VersionedTransaction) => Promise<TransactionResult>;
   wallet: any;
 }
 
 /**
- * Get connection - exported for use in other modules
+ * Get RPC connection using Solana Kit
  */
 export function getConnection(): Connection {
-  return getSolanaConnection();
+  const endpoint = GET_CURRENT_ENDPOINT();
+  return new Connection(endpoint, 'confirmed');
 }
 
 /**
  * Hook for wallet operations - uses direct window.solana API
  * Compatible with Phantom and Brave browsers
+ * Uses Solana Kit for RPC operations
  */
 export function useWallet(): UseWalletResult {
   const [network, setNetwork] = useState<'devnet' | 'mainnet'>('devnet');
-  const [publicKey, setPublicKey] = useState<PublicKey | null>(null);
+  const [publicKey, setPublicKey] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [connection, setConnection] = useState<Connection | null>(null);
   const walletRef = useRef<any>(null);
@@ -82,15 +86,14 @@ export function useWallet(): UseWalletResult {
         if (provider.isConnected) {
           const storedPk = localStorage.getItem('phantom-key');
           if (storedPk) {
-            const pk = new PublicKey(storedPk);
-            setPublicKey(pk);
+            setPublicKey(storedPk);
             setIsConnected(true);
           } else {
             // Try to get public key from provider
             try {
               const pkStr = provider.publicKey?.toBase58();
               if (pkStr) {
-                setPublicKey(new PublicKey(pkStr));
+                setPublicKey(pkStr);
                 setIsConnected(true);
               }
             } catch {
@@ -121,13 +124,13 @@ export function useWallet(): UseWalletResult {
     try {
       const accounts = await provider.connect();
       if (accounts && accounts.publicKey) {
-        const pubKey = new PublicKey(accounts.publicKey);
-        setPublicKey(pubKey);
+        const pubKeyStr = accounts.publicKey.toBase58();
+        setPublicKey(pubKeyStr);
         setIsConnected(true);
         walletRef.current = provider;
 
         console.log('[HashDrop] Wallet connected:', {
-          publicKey: pubKey.toBase58(),
+          publicKey: pubKeyStr,
           network: network,
         });
       } else {
@@ -173,9 +176,9 @@ export function useWallet(): UseWalletResult {
   }, []);
 
   // Send transaction using the wallet's native API (Phantom/Brave)
-  // Supports both legacy Transaction and VersionedTransaction
+  // Supports VersionedTransaction for v1 transactions
   const sendTransaction = useCallback(async (
-    transaction: Transaction | VersionedTransaction
+    transaction: VersionedTransaction
   ): Promise<TransactionResult> => {
     if (typeof window === 'undefined') {
       return {
@@ -218,7 +221,7 @@ export function useWallet(): UseWalletResult {
         };
       }
 
-      // Check if it's a VersionedTransaction
+      // Check if it's a VersionedTransaction (v1 only)
       const isVersioned = transaction instanceof VersionedTransaction;
       
       if (isVersioned) {
@@ -247,72 +250,10 @@ export function useWallet(): UseWalletResult {
           };
         }
       } else {
-        // For legacy Transaction
-        const legacyTx = transaction as Transaction;
-        
-        if (!legacyTx.instructions || legacyTx.instructions.length === 0) {
-          return {
-            success: false,
-            signature: null,
-            error: 'Transaction has no instructions',
-            blockTime: null,
-          };
-        }
-
-        // Ensure feePayer is set
-        legacyTx.feePayer = publicKey;
-
-        // Get recent blockhash
-        if (!legacyTx.recentBlockhash) {
-          const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash('confirmed');
-          legacyTx.recentBlockhash = blockhash;
-          legacyTx.lastValidBlockHeight = lastValidBlockHeight;
-        }
-
-        console.log('[HashDrop] Sending transaction to wallet:', {
-          wallet: publicKey.toBase58(),
-          network: GET_CURRENT_ENDPOINT(),
-          instructionCount: legacyTx.instructions.length,
-        });
-
-        let signature: string;
-
-        // Phantom uses signAndSendTransaction or signTransaction with sendRawTransaction
-        if (provider.signAndSendTransaction) {
-          // Phantom supports signAndSendTransaction directly
-          const result = await provider.signAndSendTransaction(legacyTx, conn);
-          signature = result.signature;
-          console.log('[HashDrop] Transaction signed and sent:', signature);
-        } else if (provider.signTransaction) {
-          // Fallback to signTransaction then sendRawTransaction
-          const signedTx = await provider.signTransaction(legacyTx);
-          signature = await conn.sendRawTransaction(signedTx.serialize());
-          console.log('[HashDrop] Transaction signed and sent:', signature);
-        } else {
-          // Try attach sending the transaction directly
-          if (provider.sendTransaction) {
-            signature = await provider.sendTransaction(legacyTx, conn);
-            console.log('[HashDrop] Transaction sent:', signature);
-          } else {
-            return {
-              success: false,
-              signature: null,
-              error: 'Wallet does not support transaction signing',
-              blockTime: null,
-            };
-          }
-        }
-
-        // Confirm transaction
-        console.log('[HashDrop] Waiting for confirmation...');
-        await conn.confirmTransaction(signature, 'confirmed');
-
-        console.log('[HashDrop] Transaction confirmed');
-
         return {
-          success: true,
-          signature,
-          error: null,
+          success: false,
+          signature: null,
+          error: 'Only v1 transactions (VersionedTransaction) are supported. Legacy transactions are not supported.',
           blockTime: null,
         };
       }

@@ -1,10 +1,12 @@
 'use client';
+import { useState } from 'react';
 
-import { PublicKey } from '@solana/web3.js';
+// Use address string instead of PublicKey for Kit compatibility
+type Address = string;
 
 interface WalletConnectProps {
   isConnected: boolean;
-  publicKey: PublicKey | null;
+  publicKey: Address | null;
   onConnect: () => Promise<void>;
   onDisconnect: () => Promise<void>;
 }
@@ -23,7 +25,7 @@ export function WalletConnect({ isConnected, publicKey, onConnect, onDisconnect 
       {isConnected && publicKey ? (
         <div className="flex items-center justify-between">
           <div className="text-sm text-secondary">
-            Connected as: <span className="font-mono text-xs text-accent">{publicKey.toBase58().slice(0, 4)}...{publicKey.toBase58().slice(-4)}</span>
+            Connected as: <span className="font-mono text-xs text-accent">{publicKey.slice(0, 4)}...{publicKey.slice(-4)}</span>
           </div>
           <button
             onClick={handleDisconnect}
@@ -46,3 +48,5 @@ export function WalletConnect({ isConnected, publicKey, onConnect, onDisconnect 
     </div>
   );
 }
+
+export default WalletConnect;

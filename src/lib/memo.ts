@@ -5,8 +5,6 @@
  * This is now the ONLY publication method for HashDrop.
  */
 
-import { PublicKey } from '@solana/web3.js';
-
 // Canonical SPL Memo program ID
 export const MEMO_PROGRAM_ID = 'Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH';
 
@@ -92,13 +90,6 @@ export function getMemoProgramId(): string {
 }
 
 /**
- * Get the memo program public key as PublicKey object
- */
-export function getMemoProgramPublicKey(): PublicKey {
-  return new PublicKey(MEMO_PROGRAM_ID);
-}
-
-/**
  * Encode string to base64 (handles unicode properly)
  */
 function encodeBase64(str: string): string {
@@ -112,14 +103,13 @@ function encodeBase64(str: string): string {
 }
 
 /**
- * Check if content fits within memo size limits for a given transaction version
+ * Check if content fits within memo size limits for v1 transactions (4096 bytes)
  * @param content - The content to check
- * @param maxTransactionBytes - Maximum transaction bytes (default: 1232 for legacy/v0)
  * @returns true if content fits within the transaction limits
  */
-export function canFitInMemo(content: string, maxTransactionBytes?: number): boolean {
+export function canFitInMemo(content: string): boolean {
   const bytes = new TextEncoder().encode(content);
-  const maxBytes = maxTransactionBytes || LEGACY_TRANSACTION_MAX_BYTES;
+  const maxBytes = V1_TRANSACTION_MAX_BYTES;
   
   // Calculate the memo payload size
   const base64Content = encodeBase64(content);
@@ -138,22 +128,25 @@ export function canFitInMemo(content: string, maxTransactionBytes?: number): boo
   
   const memoBytes = new TextEncoder().encode(memoPayload).length;
   
-  // Transaction overhead (approximate)
-  const TRANSACTION_OVERHEAD = 140;
+  // Transaction overhead for v1 transactions:
+  // - Message header: ~4 bytes
+  // - Account keys: ~32 bytes each (at least one for fee payer)
+  // - Instructions: ~6 bytes + memo length
+  // - Signature: ~64 bytes
+  // Total overhead: ~176 bytes
+  const TRANSACTION_OVERHEAD = 176;
   const totalTransactionSize = memoBytes + TRANSACTION_OVERHEAD;
   
   return totalTransactionSize <= maxBytes;
 }
 
 /**
- * Get the maximum content size that can fit in a transaction
- * @param maxTransactionBytes - Maximum transaction bytes (default: 1232 for legacy/v0)
+ * Get the maximum content size that can fit in a v1 transaction
  * @returns Maximum content size in bytes
  */
-export function getMaxContentSize(maxTransactionBytes?: number): number {
-  const maxBytes = maxTransactionBytes || LEGACY_TRANSACTION_MAX_BYTES;
-  const TRANSACTION_OVERHEAD = 140;
-  return maxBytes - TRANSACTION_OVERHEAD;
+export function getMaxContentSize(): number {
+  const TRANSACTION_OVERHEAD = 176;
+  return V1_TRANSACTION_MAX_BYTES - TRANSACTION_OVERHEAD;
 }
 
 /**
@@ -179,11 +172,10 @@ export function getSerializedTransactionSize(memoBytes: number): number {
 }
 
 /**
- * Validate that a transaction with the given memo will fit within Solana limits
- * Uses dynamic limits based on transaction version
+ * Validate that a transaction with the given memo will fit within v1 limits (4096 bytes)
  */
-export function canSerializeTransaction(memoContent: string, maxTransactionBytes?: number): boolean {
-  const maxBytes = maxTransactionBytes || LEGACY_TRANSACTION_MAX_BYTES;
+export function canSerializeTransaction(memoContent: string): boolean {
+  const maxBytes = V1_TRANSACTION_MAX_BYTES;
   const memoBytes = new TextEncoder().encode(memoContent).length;
   const totalSize = getSerializedTransactionSize(memoBytes);
   return totalSize <= maxBytes;
@@ -193,7 +185,7 @@ export function canSerializeTransaction(memoContent: string, maxTransactionBytes
  * Calculate the actual transaction size for a given content
  * Returns the total transaction size in bytes
  */
-export function calculateTransactionSize(content: string, maxTransactionBytes?: number): {
+export function calculateTransactionSize(content: string): {
   contentBytes: number;
   memoPayloadBytes: number;
   transactionBytes: number;
@@ -215,9 +207,10 @@ export function calculateTransactionSize(content: string, maxTransactionBytes?: 
   );
   
   const memoPayloadBytes = new TextEncoder().encode(memoPayload).length;
-  const TRANSACTION_OVERHEAD = 140;
+  // Transaction overhead for v1 transactions: ~176 bytes
+  const TRANSACTION_OVERHEAD = 176;
   const transactionBytes = memoPayloadBytes + TRANSACTION_OVERHEAD;
-  const maxBytes = maxTransactionBytes || LEGACY_TRANSACTION_MAX_BYTES;
+  const maxBytes = V1_TRANSACTION_MAX_BYTES;
   const availableBytes = maxBytes - transactionBytes;
   
   return {

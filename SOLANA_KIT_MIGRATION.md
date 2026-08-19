@@ -128,45 +128,122 @@ HASHDROP|v2|MEMO|<hashDropId>|<sha256>|<mimeType>|<length>|<base64Content>
 
 ## Migration Plan
 
-### Phase 1: Install Solana Kit
+### Phase 1: Install Solana Kit ✅ COMPLETE
 
-Install the modern Solana Kit packages:
-```bash
-npm install @solana/kit @solana/react @solana/kit-plugin-wallet
-npm install @solana-program/memo
-```
+Installed packages:
+- `@solana/kit@7.1.1`
+- `@solana/react@7.1.1`
+- `@solana/kit-plugin-wallet@0.14.0`
+- `@solana-program/memo@0.12.0`
 
 ### Phase 2: Wallet Migration
 
-Replace `@solana/wallet-adapter-*` with:
-- `@solana/react` - React hooks for wallet
-- `@solana/kit-plugin-wallet` - Wallet Standard plugin
+Replace `@solana/wallet-adapter-*` with Wallet Standard:
+
+**New Architecture:**
+- `useWallets()` from `@wallet-standard/react-core` - Discovers wallets
+- `useWalletAccountTransactionSigner()` from `@solana/react` - Gets transaction signer
+- `ClientProvider` from `@solana/react` - Provides Kit client to app
+- `useClient()` from `@solana/react` - Accesses the client
+
+**Wallet Connection Flow:**
+```tsx
+// Discover wallets
+const wallets = useWallets();
+
+// Filter for Solana wallets
+const solanaWallets = wallets.filter(w => w.chains.includes('solana:devnet'));
+
+// Get transaction signer for selected wallet
+const transactionSigner = useWalletAccountTransactionSigner(selectedAccount, 'solana:devnet');
+```
 
 ### Phase 3: RPC Migration
 
 Replace `Connection` with Kit RPC:
-- `createRpc()` from `@solana/kit`
-- Maintain network switching capability
+
+**New API:**
+```typescript
+import { createSolanaRpc } from '@solana/rpc';
+
+// Create RPC
+const rpc = createSolanaRpc('https://api.devnet.solana.com');
+
+// Methods
+await rpc.getLatestBlockhash().send();
+await rpc.getMinimumBalanceForRentExemption(dataSize).send();
+await rpc.getFeeForMessage(message).send();
+await rpc.getTransaction(signature, { maxSupportedTransactionVersion: 1 }).send();
+```
 
 ### Phase 4: Address Migration
 
 Replace `PublicKey` with `Address`:
-- `createAddress()` from `@solana/kit`
-- Update all address handling
+
+**New API:**
+```typescript
+import { isAddress, toPublicKey } from '@solana/kit';
+
+// Address is a string type
+type Address = string;
+
+// Convert from PublicKey
+const address = publicKey.toBase58(); // Already an Address
+
+// Validate
+if (isAddress(address)) { ... }
+```
 
 ### Phase 5: Transaction Architecture
 
 Replace legacy transaction classes with Kit:
-- `TransactionMessage` → Kit transaction planner
-- `VersionedTransaction` → Kit transaction builder
-- Implement v1 transaction support
+
+**New API:**
+```typescript
+import {
+  createTransactionMessage,
+  setTransactionMessageFeePayer,
+  setTransactionMessageLifetimeUsingBlockhash,
+  appendTransactionMessageInstruction,
+  compileTransactionMessage,
+  getTransactionSize,
+} from '@solana/transaction-messages';
+
+// Create transaction message
+const transactionMessage = createTransactionMessage({ version: 0 });
+
+// Set fee payer
+const messageWithPayer = setTransactionMessageFeePayer(feePayerAddress, transactionMessage);
+
+// Set lifetime
+const messageWithLifetime = setTransactionMessageLifetimeUsingBlockhash(blockhash, messageWithPayer);
+
+// Add instruction
+const messageWithInstruction = appendTransactionMessageInstruction(instruction, messageWithLifetime);
+
+// Compile
+const compiledTransaction = compileTransactionMessage(messageWithInstruction);
+
+// Get size
+const size = getTransactionSize(compiledTransaction);
+```
 
 ### Phase 6: Solana V1 Transaction Support
 
 Implement v1 transaction creation:
-- Use Kit's v1 transaction APIs
-- Verify 4096-byte limit
-- Calculate actual available payload
+
+**New API:**
+```typescript
+import { createTransactionMessage } from '@solana/transaction-messages';
+
+// Create v1 transaction message
+const transactionMessage = createTransactionMessage({ version: 1 });
+
+// V1 transactions support:
+// - 4096 byte limit
+// - No lookup tables (simplified)
+// - Config for compute units, priority fees, etc.
+```
 
 ### Phase 7: Testing
 
@@ -186,3 +263,35 @@ Test on Devnet:
 3. **Use UTF-8 byte length** - Not character count
 4. **Preserve HashDrop protocol** - Same hash generation, same memo format
 5. **Network support** - Check if v1 is actually supported on target network
+
+## API Reference
+
+### RPC Methods Mapping
+
+| Legacy (web3.js) | Kit |
+|-----------------|-----|
+| `connection.getLatestBlockhash()` | `rpc.getLatestBlockhash().send()` |
+| `connection.getMinimumBalanceForRentExemption(size)` | `rpc.getMinimumBalanceForRentExemption(size).send()` |
+| `connection.getFeeForMessage(message)` | `rpc.getFeeForMessage(message).send()` |
+| `connection.sendRawTransaction(tx)` | `rpc.sendRawTransaction(tx).send()` |
+| `connection.confirmTransaction(sig)` | `rpc.confirmTransaction(sig).send()` |
+| `connection.getTransaction(sig, opts)` | `rpc.getTransaction(sig, opts).send()` |
+
+### Transaction Methods Mapping
+
+| Legacy (web3.js) | Kit |
+|-----------------|-----|
+| `new TransactionMessage({ payerKey, recentBlockhash, instructions })` | `createTransactionMessage({ version })` + setters |
+| `transactionMessage.compileToV0Message()` | `compileTransactionMessage(message)` |
+| `new VersionedTransaction(message)` | `compileTransactionMessage(message)` returns compiled |
+| `transaction.serialize()` | `compiledTransaction` (already serialized) |
+| `transaction.message.version` | `compiledTransaction.version` |
+
+### Wallet Methods Mapping
+
+| Legacy (web3.js) | Kit |
+|-----------------|-----|
+| `window.solana.connect()` | `walletAccount.connect()` |
+| `window.solana.disconnect()` | `walletAccount.disconnect()` |
+| `window.solana.signTransaction(tx)` | `transactionSigner.modifyAndSignTransactions([tx])` |
+| `window.solana.signAndSendTransaction(tx, conn)` | Use `useSendTransaction` hook |

@@ -38,7 +38,7 @@ export default function Home() {
     const processContentData = async () => {
       if (content && content.length > 0) {
         try {
-          const meta = await processContent(content, publicKey?.toBase58() || 'pending');
+const meta = await processContent(content, publicKey || 'pending');
           setContentMeta(meta);
 
           console.log('[HashDrop] Content processed:', {
@@ -60,13 +60,11 @@ export default function Home() {
   useEffect(() => {
     if (content && publicKey) {
       const calculateInfo = async () => {
-        const connection = getConnection();
-        const capabilities = await detectTransactionCapabilities(connection);
-        const info = calculateTransactionSize(content, capabilities.maxTransactionBytes);
+        const info = calculateTransactionSize(content);
         setTransactionInfo({
           transactionSize: info.transactionBytes,
           maxTransactionSize: info.maxTransactionBytes,
-          version: capabilities.preferredVersion,
+          version: 'v1',
           availableBytes: info.availableBytes,
         });
       };
@@ -121,7 +119,7 @@ export default function Home() {
         base64Content
       );
 
-      // Build transaction using v0 format (VersionedTransaction)
+      // Build transaction using v1 format (VersionedTransaction)
       const memoProgramId = new PublicKey(MEMO_PROGRAM_ID);
       const memoInstruction = new TransactionInstruction({
         programId: memoProgramId,
@@ -129,16 +127,29 @@ export default function Home() {
         keys: [],
       });
 
-      // Create TransactionMessage and compile to v0
+      // Create TransactionMessage and compile to v1 using Kit
       const { TransactionMessage } = require('@solana/web3.js');
+      const { compileTransactionMessage } = require('@solana/transaction-messages');
+      const { setTransactionMessageFeePayer, setTransactionMessageLifetimeUsingBlockhash, appendTransactionMessageInstruction } = require('@solana/transaction-messages');
+      
       const transactionMessage = new TransactionMessage({
-        payerKey: publicKey,
+        payerKey: new PublicKey(publicKey),
         recentBlockhash: blockhash,
         instructions: [memoInstruction],
       });
 
-      const v0Message = transactionMessage.compileToV0Message();
-      const transaction = new VersionedTransaction(v0Message);
+      // Build v1 message using Kit's API
+      let v1Message = {
+        version: 1,
+        instructions: [],
+      } as any;
+      
+      v1Message = setTransactionMessageFeePayer(new PublicKey(publicKey), v1Message);
+      v1Message = setTransactionMessageLifetimeUsingBlockhash({ blockhash, lastValidBlockHeight: BigInt(0) }, v1Message);
+      v1Message = appendTransactionMessageInstruction(memoInstruction, v1Message);
+      
+      const compiledMessage = compileTransactionMessage(v1Message);
+      const transaction = new VersionedTransaction(compiledMessage);
 
       // Serialize and check actual size
       const serialized = transaction.serialize();

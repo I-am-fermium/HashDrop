@@ -142,14 +142,13 @@ export function usePublish() {
   /**
    * Get estimated fees for Memo Drop using network-authoritative pricing
    */
-  const getMemoDropFees = useCallback(async (connection?: Connection): Promise<{
+    const getMemoDropFees = useCallback(async (connection?: Connection): Promise<{
     baseFee: number;
     protocolFee: number;
     total: number;
   }> => {
-    const conn = connection || getConnectionLocal();
     try {
-      const baseFee = await getBaseTransactionFee(conn);
+      const baseFee = await getBaseTransactionFee();
       return {
         baseFee,
         protocolFee: PROTOCOL_FEE_LAMPORTS,

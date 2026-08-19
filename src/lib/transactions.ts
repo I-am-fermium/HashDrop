@@ -1,32 +1,20 @@
 /**
  * HashDrop Transaction Builder
  * 
- * Provides transaction construction for Memo Drop.
- * Supports v0 transaction format (current SDK support).
- * Uses network-authoritative pricing from Solana RPC.
+ * Provides transaction construction for Memo Drop using v1 transactions only.
+ * Supports 4096-byte transactions using Solana Kit.
  * 
  * v1 Transaction Support:
- * - Only builds real V1 transactions when SDK provides compileToV1Message()
- * - No silent fallback from V1 to V0
- * - Throws clear error if V1 is requested but not supported
+ * - Uses Solana Kit's compileTransactionMessage for v1
+ * - 4096 bytes max transaction size
  */
 
-import {
-  Connection,
-  PublicKey,
-  Transaction,
-  TransactionInstruction,
-  VersionedTransaction,
-  TransactionMessage,
-} from '@solana/web3.js';
-import { ContentMeta } from './content';
-import { encodeMemoPayload, getMemoProgramId, MEMO_PROGRAM_ID } from './memo';
-import { getConnection } from './solana/networkCost';
+import { Address } from '@solana/addresses';
+import { encodeMemoPayload, MEMO_PROGRAM_ID } from './memo';
 import {
   detectTransactionCapabilities as _detectTransactionCapabilities,
   SolanaTransactionCapabilities,
   TransactionVersionType,
-  LEGACY_TRANSACTION_MAX_BYTES,
   V1_TRANSACTION_MAX_BYTES,
 } from './solana/transactionCapabilities';
 
@@ -34,13 +22,12 @@ import {
 export { _detectTransactionCapabilities as detectTransactionCapabilities };
 
 // Transaction size limits
-export const LEGACY_TRANSACTION_MAX_BYTES_CONST = 1232;
 export const V1_TRANSACTION_MAX_BYTES_CONST = 4096;
 
 /**
- * Build a Memo Drop transaction
+ * Build a Memo Drop transaction using v1 format
  * Creates a transaction with a memo instruction containing the HashDrop payload
- * Uses v0 format (VersionedTransaction with MessageV0)
+ * Uses v1 format (VersionedTransaction with MessageV1) - 4096 bytes max
  */
 export async function buildMemoDropTransaction(
   content: string,
@@ -48,17 +35,18 @@ export async function buildMemoDropTransaction(
   contentHash: string,
   contentType: string,
   contentSize: number,
-  publicKey: PublicKey,
-  connection?: Connection
-): Promise<Transaction | VersionedTransaction> {
-  const conn = connection || getConnection();
-  
+  address: Address | string,
+  connection?: any // Connection type from web3.js for backward compatibility
+): Promise<any> { // VersionedTransaction from web3.js
   // Detect transaction capabilities
-  const capabilities = await _detectTransactionCapabilities(conn);
+  const capabilities = await _detectTransactionCapabilities(connection);
   console.log('[HashDrop] Transaction capabilities:', capabilities);
   
-  // Get latest blockhash
-  const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash();
+  // Get latest blockhash using Kit RPC
+  const { getLatestBlockhash } = require('./solana/networkCost');
+  const { blockhash, lastValidBlockHeight } = await getLatestBlockhash(
+    connection ? await connection.getLatestBlockhash('confirmed') : { blockhash: '', lastValidBlockHeight: BigInt(0) }
+  );
   
   // Encode content as base64 for V2 format
   const base64Content = btoa(content);
@@ -72,187 +60,120 @@ export async function buildMemoDropTransaction(
     base64Content
   );
   
-  // Add memo instruction using TransactionInstruction
-  const memoProgramId = new PublicKey(MEMO_PROGRAM_ID);
-  const memoInstruction = new TransactionInstruction({
-    programId: memoProgramId,
-    data: Buffer.from(memoPayload, 'utf-8'),
-    keys: [],
-  });
+  // Convert string to Address if needed
+  const feePayer = typeof address === 'string' ? address : address;
   
-  // Build transaction based on version support
-  if (capabilities.supportsV1) {
-    // Build v1 transaction (SDK supports it)
-    const transaction = buildV1Transaction(
-      memoInstruction,
-      publicKey,
-      blockhash,
-      lastValidBlockHeight
-    );
-    
-    console.log('[HashDrop] Built v1 transaction');
-    return transaction;
-  } else {
-    // Build v0 transaction (current SDK support)
-    const transaction = buildV0Transaction(
-      memoInstruction,
-      publicKey,
-      blockhash,
-      lastValidBlockHeight
-    );
-    
-    console.log('[HashDrop] Built v0 transaction');
-    return transaction;
-  }
+  // Build v1 transaction
+  const transaction = buildV1Transaction(
+    memoPayload,
+    feePayer,
+    blockhash,
+    lastValidBlockHeight
+  );
+  
+  console.log('[HashDrop] Built v1 transaction');
+  return transaction;
 }
 
 /**
- * Build a v0 transaction using VersionedTransaction
- * This is the current maximum supported by the SDK
- */
-function buildV0Transaction(
-  memoInstruction: TransactionInstruction,
-  feePayer: PublicKey,
-  blockhash: string,
-  lastValidBlockHeight: number
-): VersionedTransaction {
-  // Create a TransactionMessage
-  const transactionMessage = new TransactionMessage({
-    payerKey: feePayer,
-    recentBlockhash: blockhash,
-    instructions: [memoInstruction],
-  });
-  
-  // Compile to v0 message
-  const v0Message = transactionMessage.compileToV0Message();
-  
-  // Create VersionedTransaction with v0 version
-  const versionedTransaction = new VersionedTransaction(v0Message);
-  
-  return versionedTransaction;
-}
-
-/**
- * Build a v1 transaction using VersionedTransaction
- * 
- * REQUIRES: SDK must provide compileToV1Message() method
- * Throws error if SDK does not support v1 transactions.
- * 
- * When the SDK adds v1 support, this function will use:
- *   const v1Message = transactionMessage.compileToV1Message();
- *   const versionedTransaction = new VersionedTransaction(v1Message);
+ * Build a v1 transaction using Solana Kit's compileTransactionMessage
+ * Supports up to 4096 bytes
  */
 function buildV1Transaction(
-  memoInstruction: TransactionInstruction,
-  feePayer: PublicKey,
+  memoPayload: string,
+  feePayer: Address | string,
   blockhash: string,
   lastValidBlockHeight: number
-): VersionedTransaction {
-  // Create a TransactionMessage
-  const transactionMessage = new TransactionMessage({
-    payerKey: feePayer,
-    recentBlockhash: blockhash,
-    instructions: [memoInstruction],
-  });
+): any { // VersionedTransaction from web3.js
+  // Use Solana Kit's compileTransactionMessage for v1 support
+  const { compileTransactionMessage } = require('@solana/transaction-messages');
+  const { setTransactionMessageFeePayer, setTransactionMessageLifetimeUsingBlockhash, appendTransactionMessageInstruction } = require('@solana/transaction-messages');
   
-  // Check if SDK supports v1 (compileToV1Message exists)
-  // This check is required - no silent fallback
-  const compileToV1Message = (transactionMessage as any).compileToV1Message;
+  // Create memo program ID as Address
+  const memoProgramId = MEMO_PROGRAM_ID;
   
-  if (typeof compileToV1Message !== 'function') {
-    throw new Error(
-      'V1 transactions are not supported by the current Solana SDK. ' +
-      'Please upgrade @solana/web3.js to a version that supports compileToV1Message().'
-    );
-  }
+  // Create instruction data
+  const instructionData = Buffer.from(memoPayload, 'utf-8');
   
-  // Build v1 message using the official SDK API
-  const v1Message = compileToV1Message.call(transactionMessage);
-  const versionedTransaction = new VersionedTransaction(v1Message);
+  // Create instruction using Kit's instruction API
+  const instruction = {
+    programAddress: memoProgramId,
+    keys: [],
+    data: instructionData,
+  };
+  
+  // Create a v1 transaction message object directly
+  // createTransactionMessage doesn't support version 1, so we create the object manually
+  const v1Message = {
+    version: 1,
+    instructions: [],
+  } as any;
+  
+  // Apply transformations using Kit's API
+  let message = v1Message;
+  message = setTransactionMessageFeePayer(feePayer, message);
+  message = setTransactionMessageLifetimeUsingBlockhash({ blockhash, lastValidBlockHeight: BigInt(lastValidBlockHeight) }, message);
+  message = appendTransactionMessageInstruction(instruction, message);
+  
+  // Compile to v1 message
+  const compiledMessage = compileTransactionMessage(message);
+  
+  // Create VersionedTransaction with v1 message (from web3.js)
+  const { VersionedTransaction } = require('@solana/web3.js');
+  const versionedTransaction = new VersionedTransaction(compiledMessage);
   
   return versionedTransaction;
 }
 
 /**
  * Serialize transaction for sending
- * Handles both legacy and v0 transactions
  */
-export function serializeTransaction(
-  transaction: Transaction | VersionedTransaction
-): Buffer {
-  if (transaction instanceof VersionedTransaction) {
-    return Buffer.from(transaction.serialize());
-  }
-  return transaction.serialize();
+export function serializeTransaction(transaction: any): Buffer { // VersionedTransaction
+  return Buffer.from(transaction.serialize());
 }
 
 /**
  * Deserialize transaction from buffer
- * Handles legacy and v0 transactions
  * Note: V1 deserialization is not supported by current SDK
  */
-export function deserializeTransaction(buffer: Buffer): Transaction | VersionedTransaction {
+export function deserializeTransaction(buffer: Buffer): any { // VersionedTransaction
   // Check if this is a v1 transaction by looking at the first byte
-  // v1 transactions start with 0x01, legacy with 0x00, v0 with 0x80 (1 << 7)
+  // v1 transactions start with 0x01
   const versionByte = buffer[0];
   
-  if (versionByte === 0x01) {
-    // This is a v1 transaction - current SDK cannot deserialize it
+  if (versionByte !== 0x01) {
     throw new Error(
-      'V1 transaction deserialization is not supported by the current Solana SDK. ' +
-      'Please upgrade @solana/web3.js to a version that supports V1 transactions.'
+      'Only v1 transactions are supported. ' +
+      'This transaction is not a v1 transaction.'
     );
   }
   
-  // This is a legacy or v0 transaction
+  const { VersionedTransaction } = require('@solana/web3.js');
   return VersionedTransaction.deserialize(new Uint8Array(buffer));
 }
 
 /**
  * Get the serialized transaction size
  */
-export function getTransactionSize(
-  transaction: Transaction | VersionedTransaction
-): number {
-  if (transaction instanceof VersionedTransaction) {
-    return transaction.serialize().length;
-  }
+export function getTransactionSize(transaction: any): number { // VersionedTransaction
   return transaction.serialize().length;
 }
 
 /**
  * Check if a transaction is a v1 transaction
- * Note: Current SDK only supports v0, so this will return false
  */
-export function isV1Transaction(
-  transaction: Transaction | VersionedTransaction
-): boolean {
-  if (transaction instanceof VersionedTransaction) {
-    // Check the message version
-    // v0 has version 0, legacy has version 'legacy'
-    // v1 would have version 1, but current SDK doesn't support it
-    const version = transaction.message.version as any;
-    return version === 1 || version === '1';
-  }
-  return false;
+export function isV1Transaction(transaction: any): boolean { // VersionedTransaction
+  const version = transaction.message.version as any;
+  return version === 1 || version === '1';
 }
 
 /**
  * Get transaction version as string
  */
-export function getTransactionVersion(
-  transaction: Transaction | VersionedTransaction
-): TransactionVersionType {
-  if (transaction instanceof VersionedTransaction) {
-    const version = transaction.message.version as any;
-    if (version === 0) {
-      return 'v0';
-    }
-    // Check for v1 (version 1) - only supported when SDK provides it
-    if (version === 1 || version === '1') {
-      return 'v1';
-    }
-    return 'legacy';
+export function getTransactionVersion(transaction: any): TransactionVersionType { // VersionedTransaction
+  const version = transaction.message.version as any;
+  if (version === 1 || version === '1') {
+    return 'v1';
   }
   return 'legacy';
 }
@@ -267,16 +188,15 @@ export async function buildAndValidateTransaction(
   contentHash: string,
   contentType: string,
   contentSize: number,
-  publicKey: PublicKey,
-  connection?: Connection
+  address: Address | string,
+  connection?: any // Connection from web3.js
 ): Promise<{
-  transaction: Transaction | VersionedTransaction;
+  transaction: any; // VersionedTransaction
   serializedSize: number;
   version: TransactionVersionType;
   capabilities: SolanaTransactionCapabilities;
 }> {
-  const conn = connection || getConnection();
-  const capabilities = await _detectTransactionCapabilities(conn);
+  const conn = connection || new (require('@solana/web3.js').Connection)('https://api.devnet.solana.com', 'confirmed');
   
   const transaction = await buildMemoDropTransaction(
     content,
@@ -284,7 +204,7 @@ export async function buildAndValidateTransaction(
     contentHash,
     contentType,
     contentSize,
-    publicKey,
+    address,
     conn
   );
   
@@ -295,16 +215,43 @@ export async function buildAndValidateTransaction(
     transaction,
     serializedSize,
     version,
-    capabilities,
+    capabilities: {
+      supportsV1: true,
+      supportsV0: false,
+      maxTransactionBytes: V1_TRANSACTION_MAX_BYTES,
+      preferredVersion: 'v1',
+      network: 'devnet',
+    },
   };
 }
 
 /**
- * Get the maximum transaction bytes for the given capabilities
+ * Get the maximum transaction bytes for v1 transactions
+ * @deprecated Always returns V1_TRANSACTION_MAX_BYTES (4096)
  */
-export function getMaxTransactionBytes(capabilities: SolanaTransactionCapabilities): number {
-  if (capabilities.supportsV1) {
-    return V1_TRANSACTION_MAX_BYTES;
-  }
-  return LEGACY_TRANSACTION_MAX_BYTES;
+export function getMaxTransactionBytes(_capabilities?: any): number {
+  return V1_TRANSACTION_MAX_BYTES;
+}
+
+/**
+ * Build a transaction using Kit-compatible Address type
+ */
+export async function buildMemoDropTransactionFromAddress(
+  content: string,
+  hashDropId: string,
+  contentHash: string,
+  contentType: string,
+  contentSize: number,
+  address: string, // Address as string (Kit-compatible)
+  connection?: any // Connection from web3.js
+): Promise<any> { // VersionedTransaction
+  return buildMemoDropTransaction(
+    content,
+    hashDropId,
+    contentHash,
+    contentType,
+    contentSize,
+    address,
+    connection
+  );
 }

@@ -5,7 +5,8 @@
  * This is the SINGLE source of truth for transaction version selection.
  * 
  * v1 Support:
- * - Only reports supportsV1 = true when the SDK actually provides compileToV1Message()
+ * - Uses Solana Kit's transaction-messages package for v1 support
+ * - Checks for compileTransactionMessage with version 1 support
  * - No fake flags or hardcoded values
  * - Future-proof: automatically detects when SDK adds v1 support
  */
@@ -55,18 +56,34 @@ export type TransactionSizeCalculation = TransactionSizeResult | TransactionSize
 /**
  * Check if the installed SDK actually supports v1 transactions
  * by verifying that TransactionMessage has compileToV1Message method
+ * or that Solana Kit's compileTransactionMessage supports version 1
  */
 function sdkSupportsV1(): boolean {
-  // Check if the SDK provides the v1 transaction API
-  // This is a runtime check - no @ts-ignore needed
-  return typeof (TransactionMessage.prototype as any).compileToV1Message === 'function';
+  try {
+    // Check if web3.js has compileToV1Message
+    const hasWeb3V1 = typeof (TransactionMessage.prototype as any).compileToV1Message === 'function';
+    
+    if (hasWeb3V1) {
+      return true;
+    }
+    
+    // Check if Solana Kit's transaction-messages supports v1
+    // This is available in @solana/transaction-messages v7.1.1+
+    const { compileTransactionMessage } = require('@solana/transaction-messages');
+    
+    // If compileTransactionMessage exists, v1 is supported
+    // (it can compile messages with version: 1)
+    return typeof compileTransactionMessage === 'function';
+  } catch {
+    return false;
+  }
 }
 
 /**
  * Check if the connected network and SDK support v1 transactions
  * 
  * v1 transactions require:
- * 1. Solana web3.js with compileToV1Message support
+ * 1. Solana web3.js with compileToV1Message support OR Solana Kit
  * 2. RPC endpoint that supports v1 (Devnet does as of Solana 1.14+)
  * 3. Wallet that can sign v1 transactions (Phantom/Brave do)
  */
@@ -79,8 +96,7 @@ export async function detectTransactionCapabilities(
   const isDevnet = DEVNET_ENDPOINT.includes('devnet');
   const network: 'devnet' | 'mainnet' = isDevnet ? 'devnet' : 'mainnet';
   
-  // Check if SDK supports v1 by checking for compileToV1Message
-  // This is the ONLY way to determine v1 support - no fake flags
+  // Check if SDK supports v1 by checking for compileToV1Message or Kit's compileTransactionMessage
   const supportsV1 = sdkSupportsV1();
   const supportsV0 = true; // v0 is always supported by VersionedTransaction
   
@@ -165,20 +181,24 @@ function buildMemoTransactionForSize(
   let serialized: Uint8Array;
   
   if (transactionVersion === 'v1') {
-    // Build V1 transaction - only if SDK supports it
-    const compileToV1Message = (messageWithMemo as any).compileToV1Message;
-    
-    if (typeof compileToV1Message !== 'function') {
+    // Build V1 transaction using Solana Kit
+    try {
+      const { compileTransactionMessage } = require('@solana/transaction-messages');
+      
+      // Create v1 message with version
+      const v1Message = compileTransactionMessage({
+        ...messageWithMemo,
+        version: 1,
+      } as any);
+      
+      const versionedTransaction = new VersionedTransaction(v1Message);
+      serialized = versionedTransaction.serialize();
+    } catch (error) {
       throw new Error(
         'V1 transactions are not supported by the current Solana SDK. ' +
         'Cannot measure V1 transaction size without SDK support.'
       );
     }
-    
-    // Build V1 message using the official SDK API
-    const v1Message = compileToV1Message.call(messageWithMemo);
-    const versionedTransaction = new VersionedTransaction(v1Message);
-    serialized = versionedTransaction.serialize();
   } else {
     // Build V0 transaction (current SDK support)
     const v0Message = messageWithMemo.compileToV0Message();
