@@ -12,6 +12,8 @@
 - [x] Create ESLint configuration (.eslintrc.json)
 - [x] Update SESSION.md with current status
 - [x] Update README.md with comprehensive documentation
+- [x] Analyze Solana v1 readiness - SDK supports v1, wallet support pending
+- [x] Update all documentation files to reflect current project state
 
 ## Architecture Summary
 
@@ -22,15 +24,18 @@
 - `src/lib/` - Utilities and types
   - `content.ts` - Content processing, SHA-256 hashing, HashDrop ID generation
   - `memo.ts` - Memo Drop encoding/decoding
-  - `transactions.ts` - Transaction builders for Storage and Memo Drop
+  - `transactions.ts` - Transaction builders
   - `verification.ts` - On-chain verification logic
-  - `constants.ts` - Program IDs, network config, sizes
+  - `constants.ts` - Program IDs, network endpoints, sizes
   - `solana/networkCost.ts` - Network-authoritative cost calculation via RPC
 
-### Backend (Rust/Solana)
-- `contracts/src/lib.rs` - Program entry point with instruction routing
-- `contracts/src/instruction.rs` - Binary serialization for instructions
-- `contracts/src/state.rs` - Account structures (MetadataAccount: 1101 bytes, ChunkAccount: variable)
+### Transaction Version Support
+
+| Version | SDK Support | Wallet Support | Status |
+|---------|-------------|----------------|--------|
+| legacy  | ✅          | ✅             | ✅ Working |
+| v0      | ✅          | ✅ (Phantom)   | ✅ Working |
+| v1      | ✅          | ⚠️ (Pending)   | ⏳ Ready |
 
 ## Key Technical Decisions
 
@@ -42,6 +47,8 @@
 
 3. **Network Costs**: Calculated using RPC calls for authoritative rent exemption values (6960 lamports/byte on Solana)
 
+4. **Transaction Version**: Currently using v0 transactions (1232-byte limit) due to Phantom wallet v1 signing limitations
+
 ## Testing
 
 Run `npm test` to execute Jest tests for content engine and memo utilities.
@@ -52,14 +59,7 @@ Run `npm test` to execute Jest tests for content engine and memo utilities.
 
 - ESLint: Configured in `.eslintrc.json`
 - TypeScript: Compiles without errors
-- Jest: Jest 29.7.0 with 14 tests for memo utilities, 16 for content engine
-
-## Next Steps (Devnet Deployment)
-
-1. Install Solana CLI (requires admin rights)
-2. Build and deploy Solana program: `cargo build-sbf`
-3. Update PROGRAM_ID in `src/lib/constants.ts`
-4. Test end-to-end publishing with Phantom wallet
+- Jest: Jest 30.4.1 with 30 tests
 
 ## Current Status
 
@@ -69,3 +69,26 @@ Run `npm test` to execute Jest tests for content engine and memo utilities.
 ✅ Memo Drop feature complete
 ✅ Storage Drop feature complete
 ✅ Wallet integration working
+✅ v1 SDK support available
+⚠️ v1 wallet support pending (Phantom)
+⏳ Devnet deployment pending human approval
+
+## Next Steps (Devnet Deployment)
+
+1. Install Solana CLI (requires admin rights)
+2. Build and deploy Solana program: `cd contracts && cargo build-sbf`
+3. Update PROGRAM_ID in `src/lib/constants.ts`
+4. Test end-to-end publishing with Phantom wallet
+
+## Memo Drop Format
+
+```
+HASHDROP|v2|MEMO|<hashDropId>|<sha256>|<mimeType>|<length>|<base64Content>
+```
+
+## Transaction Limits
+
+| Version | Max Size | Effective Content |
+|---------|----------|-------------------|
+| v0      | 1232 B   | ~800 B (base64)   |
+| v1      | 4096 B   | ~2800 B (base64)  |

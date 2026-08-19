@@ -10,7 +10,11 @@
   "@solana/wallet-adapter-base": "^0.9.27",
   "@solana/wallet-adapter-react": "^0.15.39",
   "@solana/wallet-adapter-react-ui": "^0.9.39",
-  "@solana/wallet-adapter-wallets": "^0.19.38"
+  "@solana/wallet-adapter-wallets": "^0.19.38",
+  "@solana/kit": "7.1.1",
+  "@solana/react": "7.1.1",
+  "@solana/kit-plugin-wallet": "0.14.0",
+  "@solana-program/memo": "0.12.0"
 }
 ```
 
@@ -31,21 +35,16 @@
 **Key Files:**
 - `src/hooks/useWallet.ts` - Wallet connection via `window.solana` (Phantom/Brave)
 - `src/hooks/usePublish.ts` - Memo Drop publishing
-- `src/lib/transactions.ts` - Transaction building
-- `src/lib/transactions.ts` - Transaction serialization
-- `src/lib/solana/transactionCapabilities.ts` - Transaction capability detection
-- `src/lib/memo.ts` - Memo payload encoding
+- `src/lib/transactions.ts` - Transaction builders
 - `src/lib/verification.ts` - On-chain content verification
 - `src/lib/solana/networkCost.ts` - Network cost calculation
-- `src/components/WalletProvider.tsx` - Wallet adapter provider
-- `src/components/WalletConnect.tsx` - Wallet connection UI
-- `src/app/page.tsx` - Main publish page
+- `src/lib/solana/transactionCapabilities.ts` - Transaction capability detection
+- `src/lib/memo.ts` - Memo payload encoding
 
 ### Current Wallet Architecture
 
 **Wallet Connection:**
 - Direct `window.solana` API access (Phantom/Brave browsers)
-- `WalletProvider` from `@solana/wallet-adapter-react`
 - No hardcoded wallet list - `autoConnect` enabled
 
 **Wallet Operations:**
@@ -126,7 +125,7 @@ HASHDROP|v2|MEMO|<hashDropId>|<sha256>|<mimeType>|<length>|<base64Content>
 
 ---
 
-## Migration Plan
+## Migration Status
 
 ### Phase 1: Install Solana Kit ✅ COMPLETE
 
@@ -136,123 +135,41 @@ Installed packages:
 - `@solana/kit-plugin-wallet@0.14.0`
 - `@solana-program/memo@0.12.0`
 
-### Phase 2: Wallet Migration
+### Phase 2: Wallet Migration ⏳ IN PROGRESS
 
-Replace `@solana/wallet-adapter-*` with Wallet Standard:
+Current implementation uses direct `window.solana` API for Phantom/Brave wallet compatibility.
 
-**New Architecture:**
-- `useWallets()` from `@wallet-standard/react-core` - Discovers wallets
-- `useWalletAccountTransactionSigner()` from `@solana/react` - Gets transaction signer
-- `ClientProvider` from `@solana/react` - Provides Kit client to app
-- `useClient()` from `@solana/react` - Accesses the client
-
-**Wallet Connection Flow:**
+**Current Flow:**
 ```tsx
-// Discover wallets
+// Direct window.solana API
+const { solana } = window as any;
+await solana.connect();
+const signedTx = await solana.signTransaction(transaction);
+```
+
+**Target Flow (when ready):**
+```tsx
+// Wallet Standard approach
 const wallets = useWallets();
-
-// Filter for Solana wallets
 const solanaWallets = wallets.filter(w => w.chains.includes('solana:devnet'));
-
-// Get transaction signer for selected wallet
 const transactionSigner = useWalletAccountTransactionSigner(selectedAccount, 'solana:devnet');
 ```
 
-### Phase 3: RPC Migration
+### Phase 3: RPC Migration ⏳ PLANNED
 
-Replace `Connection` with Kit RPC:
+Replace `Connection` with Kit RPC when needed.
 
-**New API:**
-```typescript
-import { createSolanaRpc } from '@solana/rpc';
+### Phase 4: Address Migration ⏳ PLANNED
 
-// Create RPC
-const rpc = createSolanaRpc('https://api.devnet.solana.com');
+Replace `PublicKey` with `Address` when needed.
 
-// Methods
-await rpc.getLatestBlockhash().send();
-await rpc.getMinimumBalanceForRentExemption(dataSize).send();
-await rpc.getFeeForMessage(message).send();
-await rpc.getTransaction(signature, { maxSupportedTransactionVersion: 1 }).send();
-```
+### Phase 5: Transaction Architecture ⏳ PLANNED
 
-### Phase 4: Address Migration
+Replace legacy transaction classes with Kit when needed.
 
-Replace `PublicKey` with `Address`:
+### Phase 6: Solana V1 Transaction Support ⏳ READY
 
-**New API:**
-```typescript
-import { isAddress, toPublicKey } from '@solana/kit';
-
-// Address is a string type
-type Address = string;
-
-// Convert from PublicKey
-const address = publicKey.toBase58(); // Already an Address
-
-// Validate
-if (isAddress(address)) { ... }
-```
-
-### Phase 5: Transaction Architecture
-
-Replace legacy transaction classes with Kit:
-
-**New API:**
-```typescript
-import {
-  createTransactionMessage,
-  setTransactionMessageFeePayer,
-  setTransactionMessageLifetimeUsingBlockhash,
-  appendTransactionMessageInstruction,
-  compileTransactionMessage,
-  getTransactionSize,
-} from '@solana/transaction-messages';
-
-// Create transaction message
-const transactionMessage = createTransactionMessage({ version: 0 });
-
-// Set fee payer
-const messageWithPayer = setTransactionMessageFeePayer(feePayerAddress, transactionMessage);
-
-// Set lifetime
-const messageWithLifetime = setTransactionMessageLifetimeUsingBlockhash(blockhash, messageWithPayer);
-
-// Add instruction
-const messageWithInstruction = appendTransactionMessageInstruction(instruction, messageWithLifetime);
-
-// Compile
-const compiledTransaction = compileTransactionMessage(messageWithInstruction);
-
-// Get size
-const size = getTransactionSize(compiledTransaction);
-```
-
-### Phase 6: Solana V1 Transaction Support
-
-Implement v1 transaction creation:
-
-**New API:**
-```typescript
-import { createTransactionMessage } from '@solana/transaction-messages';
-
-// Create v1 transaction message
-const transactionMessage = createTransactionMessage({ version: 1 });
-
-// V1 transactions support:
-// - 4096 byte limit
-// - No lookup tables (simplified)
-// - Config for compute units, priority fees, etc.
-```
-
-### Phase 7: Testing
-
-Test on Devnet:
-- 1 byte → maximum valid payload
-- Unicode content (Hindi, Japanese, Chinese, Emoji)
-- Wallet signing
-- Transaction submission
-- Retrieval and verification
+SDK support is available. Wallet support is pending Phantom wallet v1 signing support.
 
 ---
 
@@ -264,34 +181,9 @@ Test on Devnet:
 4. **Preserve HashDrop protocol** - Same hash generation, same memo format
 5. **Network support** - Check if v1 is actually supported on target network
 
-## API Reference
+## Current Status
 
-### RPC Methods Mapping
-
-| Legacy (web3.js) | Kit |
-|-----------------|-----|
-| `connection.getLatestBlockhash()` | `rpc.getLatestBlockhash().send()` |
-| `connection.getMinimumBalanceForRentExemption(size)` | `rpc.getMinimumBalanceForRentExemption(size).send()` |
-| `connection.getFeeForMessage(message)` | `rpc.getFeeForMessage(message).send()` |
-| `connection.sendRawTransaction(tx)` | `rpc.sendRawTransaction(tx).send()` |
-| `connection.confirmTransaction(sig)` | `rpc.confirmTransaction(sig).send()` |
-| `connection.getTransaction(sig, opts)` | `rpc.getTransaction(sig, opts).send()` |
-
-### Transaction Methods Mapping
-
-| Legacy (web3.js) | Kit |
-|-----------------|-----|
-| `new TransactionMessage({ payerKey, recentBlockhash, instructions })` | `createTransactionMessage({ version })` + setters |
-| `transactionMessage.compileToV0Message()` | `compileTransactionMessage(message)` |
-| `new VersionedTransaction(message)` | `compileTransactionMessage(message)` returns compiled |
-| `transaction.serialize()` | `compiledTransaction` (already serialized) |
-| `transaction.message.version` | `compiledTransaction.version` |
-
-### Wallet Methods Mapping
-
-| Legacy (web3.js) | Kit |
-|-----------------|-----|
-| `window.solana.connect()` | `walletAccount.connect()` |
-| `window.solana.disconnect()` | `walletAccount.disconnect()` |
-| `window.solana.signTransaction(tx)` | `transactionSigner.modifyAndSignTransactions([tx])` |
-| `window.solana.signAndSendTransaction(tx, conn)` | Use `useSendTransaction` hook |
+- **SDK Support**: ✅ Available (web3.js 1.98.4, Kit 7.1.1)
+- **Wallet Support**: ⚠️ Phantom v1 signing pending
+- **Current Implementation**: v0 transactions (1232-byte limit)
+- **Target Implementation**: v1 transactions (4096-byte limit) when Phantom adds support

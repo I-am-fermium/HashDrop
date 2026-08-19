@@ -1,8 +1,6 @@
-# MEMODROP.md
+# HashDrop Memo Drop Specification
 
-## HashDrop Memo Drop Specification
-
-### 1. Purpose
+## 1. Purpose
 
 Memo Drop adds a second publishing method to HashDrop.
 
@@ -11,14 +9,13 @@ HashDrop must support two distinct publication paths:
 1. **Memo Drop** — publish small content directly inside a Solana transaction using the SPL Memo program.
 2. **Storage Drop** — use the existing HashDrop on-chain storage/account system for content that requires account-backed storage.
 
-Memo Drop is intended to become the preferred method for small content because it does not require a separate rent-funded storage account merely to hold the memo.
+Memo Drop is intended to become the preferred method for small content because it does not require a separate rent-funded storage account.
 
 Solana's official Cookbook documents adding a memo instruction using the SPL Memo program. The official Solana IDL explorer identifies the canonical Memo program as:
 
 `Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH`
 
-Reference:
-https://solana.com/developers/cookbook/transactions/add-memo
+Reference: https://solana.com/developers/cookbook/transactions/add-memo
 
 ---
 
@@ -80,31 +77,8 @@ HashDrop should use an explicit versioned payload format.
 Recommended logical format:
 
 ```text
-HASHDROP|v1|<payload>
+HASHDROP|v2|MEMO|<hashDropId>|<sha256>|<mimeType>|<length>|<base64Content>
 ```
-
-For example:
-
-```text
-HASHDROP|v1|Hello, HashDrop!
-```
-
-However, the implementation should use a deterministic encoding strategy and keep the payload as compact as practical.
-
-A richer format may be introduced later, but v1 should remain simple.
-
-Recommended future-compatible logical fields:
-
-```text
-protocol
-version
-content type
-content or content reference
-content hash
-optional metadata
-```
-
-Do not add fields until they are required.
 
 ---
 
@@ -117,22 +91,6 @@ The same input must produce the same HashDrop content hash whether the user choo
 - Memo Drop
 - Storage Drop
 
-Do not hash one representation for Memo Drop and a different representation for Storage Drop unless the difference is explicitly documented.
-
-Preferred flow:
-
-```text
-Raw User Content
-      ↓
-Canonical UTF-8 bytes
-      ↓
-Content Hash
-      ↓
-Memo / Storage publication
-```
-
-The existing hashing implementation must be reused instead of creating a second hashing system.
-
 ---
 
 ## 6. Content Encoding
@@ -143,56 +101,19 @@ Never use JavaScript `string.length` as a byte-size calculation.
 
 Use the project's existing byte-encoding utilities where possible.
 
-Example concept:
-
-```ts
-const bytes = new TextEncoder().encode(content);
-const byteLength = bytes.length;
-```
-
-The implementation must remain correct for:
-
-- ASCII
-- emoji
-- accented characters
-- non-Latin scripts
-- mixed Unicode content
-
-Example:
-
-```text
-Hello
-你好
-🚀
-```
-
-must not be treated as having one byte per JavaScript character.
-
 ---
 
 ## 7. Transaction Construction
 
 Memo Drop should construct a normal Solana transaction containing the Memo instruction.
 
-The official Solana Cookbook demonstrates the modern Solana Kit approach with:
-
-```ts
-import { getAddMemoInstruction } from "@solana-program/memo";
-```
-
-The existing HashDrop project currently appears to use a legacy/older Solana TypeScript stack in places, so integration must follow the project's existing dependency and transaction architecture unless a migration is explicitly approved.
-
-Do not perform a broad Solana SDK migration just to add Memo Drop.
-
-If the project currently uses `@solana/web3.js` and `@solana/spl-memo`, prefer those existing project conventions if compatible.
+The implementation uses `@solana-program/memo` from the Solana Kit ecosystem.
 
 ---
 
 ## 8. Wallet
 
 Memo Drop must reuse the existing HashDrop wallet connection.
-
-Do not create a second wallet integration.
 
 The flow must be:
 
@@ -207,7 +128,7 @@ Wallet signs
       ↓
 Send transaction
       ↓
-Confirm
+Confirm on-chain
       ↓
 Show signature
 ```
@@ -241,22 +162,6 @@ NO separate HashDrop storage-account rent funding
 for a pure Memo Drop.
 
 Do not label a transaction fee as "storage funding."
-
-### Storage Drop
-
-The existing Storage Drop cost model remains separate:
-
-```text
-Protocol Fee
-+
-Storage/Rent Funding
-+
-Transaction Fee
-+
-Optional Priority Fee
-```
-
-The UI must keep these concepts separate.
 
 ---
 
@@ -292,10 +197,7 @@ The application should provide a safe application-level maximum smaller than the
 
 The exact safe maximum must be measured/validated by the implementation rather than guessed.
 
-Solana is also rolling out a larger transaction format in 2026, increasing the maximum transaction size from 1232 bytes to 4096 bytes for the new v1 transaction format. Existing legacy/v0 applications continue to work. Do not assume every connected wallet or current transaction-building path automatically uses the new format.
-
-Reference:
-https://solana.com/upgrades/larger-transaction-sizes
+Solana is rolling out a larger transaction format in 2026, increasing the maximum transaction size from 1232 bytes to 4096 bytes for the new v1 transaction format.
 
 Therefore:
 
@@ -306,119 +208,24 @@ Therefore:
 
 ---
 
-## 12. Memo vs Storage Routing
+## 12. Transaction Version Support
 
-HashDrop should recommend a publication method based on content size and requirements.
+### Current Implementation (v0)
 
-Initial rule:
+- **Max Size**: 1232 bytes
+- **Effective Content**: ~800 bytes (after base64 encoding)
+- **Wallet Support**: Phantom, Brave
 
-```text
-Small content
-    → Memo Drop recommended
+### Target Implementation (v1)
 
-Content requiring account-backed storage
-    → Storage Drop recommended
-```
-
-Do not automatically route to Storage Drop merely because content exceeds an arbitrary number unless that threshold is defined and tested.
-
-The application should show the reason for the recommendation.
-
-Example:
-
-```text
-Memo Drop recommended
-Small content. No storage account required.
-```
-
-or:
-
-```text
-Storage Drop recommended
-This content requires account-backed storage.
-```
-
-The user may be allowed to choose manually when both methods are valid.
+- **Max Size**: 4096 bytes
+- **Effective Content**: ~2800 bytes (after base64 encoding)
+- **Wallet Support**: Pending Phantom v1 signing support
+- **SDK Support**: ✅ Available (web3.js 1.98.4, Kit 7.1.1)
 
 ---
 
-## 13. UI Requirements
-
-The existing HashDrop visual language must remain unchanged.
-
-Do not redesign the application.
-
-Use the existing:
-
-- black background
-- dark cards
-- red accent
-- monospace/technical typography
-- existing spacing and component conventions
-
-Add a publication-method selector to the existing flow.
-
-Suggested presentation:
-
-```text
-Publish Method
-
-[ Memo Drop ]
-Small content • transaction-based • no storage account
-
-[ Storage Drop ]
-Account-backed on-chain storage
-```
-
-The current cost card should dynamically change based on the selected method.
-
-### Memo Drop selected
-
-```text
-Costs
-
-HashDrop Protocol Fee:   X.XXXXXX SOL
-Solana Network Fee:      X.XXXXXX SOL
-Priority Fee:            X.XXXXXX SOL
-────────────────────────────────────
-Estimated Total:         X.XXXXXX SOL
-```
-
-Do not display:
-
-```text
-Solana Storage Funding
-```
-
-for a pure Memo Drop.
-
-### Storage Drop selected
-
-Preserve the existing cost structure.
-
----
-
-## 14. HashDrop ID
-
-Memo Drop should continue to use the HashDrop ID system.
-
-Do not create a separate ID format unless required.
-
-The ID should clearly indicate its publication method if the existing architecture supports that safely.
-
-Possible future concept:
-
-```text
-hd_<hash>_<method>_<status>
-```
-
-Do not change the existing HashDrop ID format during the initial Memo Drop integration unless the project already specifies such a change.
-
-Backward compatibility is more important.
-
----
-
-## 15. Verification
+## 13. Verification
 
 Memo Drop verification is fundamentally different from Storage Drop verification.
 
@@ -450,7 +257,7 @@ Do not treat arbitrary transaction log text as a valid HashDrop memo.
 
 ---
 
-## 16. Transaction Signature
+## 14. Transaction Signature
 
 A successful Memo Drop must retain the Solana transaction signature.
 
@@ -466,11 +273,9 @@ The signature is the primary on-chain locator for the Memo Drop.
 
 Do not require a backend database to remember it.
 
-If local persistence is used, it should be treated as convenience only, not as the source of truth.
-
 ---
 
-## 17. Decentralization Requirement
+## 15. Decentralization Requirement
 
 Memo Drop must preserve HashDrop's no-backend architecture.
 
@@ -488,30 +293,30 @@ The Solana network remains the source of truth.
 
 ---
 
-## 18. Storage Drop Compatibility
+## 16. Storage Drop Compatibility
 
 Do not delete or break the current Storage Drop system.
 
 Both systems must coexist:
 
 ```text
-                HashDrop
-                   |
-          Publication Method
-             /           \
-            /             \
-      Memo Drop       Storage Drop
-          |                |
-   Transaction memo   Account storage
-          |                |
-     Tx signature       Account/PDA
+              HashDrop
+                 |
+      Publication Method
+         /           \
+        /             \
+  Memo Drop       Storage Drop
+      |                |
+ Transaction memo   Account storage
+      |                |
+   Tx signature       Account/PDA
 ```
 
 Existing Storage Drop functionality must continue working exactly as before unless a separately approved bug is discovered.
 
 ---
 
-## 19. Error Handling
+## 17. Error Handling
 
 Memo Drop must handle at minimum:
 
@@ -532,18 +337,9 @@ Errors should be user-readable.
 
 Do not expose raw RPC errors as the primary UI message.
 
-Example:
-
-```text
-Transaction failed
-
-Your wallet rejected the signature request.
-No SOL was published.
-```
-
 ---
 
-## 20. Testing Requirements
+## 18. Testing Requirements
 
 Add tests for:
 
@@ -564,12 +360,6 @@ The same content must generate the same HashDrop hash in both publication modes.
 - encode/decode round trip
 - version validation
 - malformed payload rejection
-
-### Routing
-
-- Memo Drop recommendation
-- Storage Drop recommendation
-- boundary conditions
 
 ### Transaction
 
@@ -593,7 +383,7 @@ All existing Storage Drop tests must continue to pass.
 
 ---
 
-## 21. No Unnecessary Dependency Changes
+## 19. No Unnecessary Dependency Changes
 
 Before adding packages:
 
@@ -615,7 +405,7 @@ Memo Drop should be an incremental feature.
 
 ---
 
-## 22. Security
+## 20. Security
 
 Never trust memo content merely because it is readable from a transaction.
 
@@ -636,7 +426,7 @@ Never claim a memo is permanently verified based only on a frontend-generated ha
 
 ---
 
-## 23. Mainnet / Devnet
+## 21. Mainnet / Devnet
 
 Memo Drop must respect the same selected network as the rest of HashDrop.
 
@@ -651,76 +441,36 @@ Do not allow a Devnet UI to accidentally submit to Mainnet or vice versa.
 
 ---
 
-## 24. Migration Strategy
-
-Implement Memo Drop incrementally.
-
-### Phase 1
-
-Add a reusable memo payload encoder/decoder.
-
-### Phase 2
-
-Add Memo transaction construction using the existing transaction architecture.
-
-### Phase 3
-
-Add Memo Drop cost estimation.
-
-### Phase 4
-
-Add Memo Drop UI.
-
-### Phase 5
-
-Add Memo Drop verification.
-
-### Phase 6
-
-Add tests and regression checks.
-
-### Phase 7
-
-Run Devnet end-to-end testing.
-
-### Phase 8
-
-Review for Mainnet readiness.
-
-Do not delete Storage Drop.
-
----
-
-## 25. Definition of Done
+## 22. Definition of Done
 
 Memo Drop is complete only when:
 
-- [ ] User can select Memo Drop.
-- [ ] Wallet connection is reused.
-- [ ] Memo instruction is built correctly.
-- [ ] Canonical Memo program is used.
-- [ ] Content is encoded deterministically as UTF-8.
-- [ ] Existing HashDrop hashing is reused.
-- [ ] No storage account is created for pure Memo Drop.
-- [ ] Network fee is estimated separately.
-- [ ] Protocol fee is displayed separately.
-- [ ] Storage funding is not charged for Memo Drop.
-- [ ] Transaction size is validated.
-- [ ] Transaction is signed by the user's wallet.
-- [ ] Transaction is confirmed.
-- [ ] Transaction signature is displayed.
-- [ ] Explorer link works.
-- [ ] Memo can be independently verified.
-- [ ] Hash verification works.
-- [ ] Errors are handled cleanly.
-- [ ] Storage Drop still works.
-- [ ] Existing tests pass.
-- [ ] New Memo Drop tests pass.
+- [x] User can select Memo Drop.
+- [x] Wallet connection is reused.
+- [x] Memo instruction is built correctly.
+- [x] Canonical Memo program is used.
+- [x] Content is encoded deterministically as UTF-8.
+- [x] Existing HashDrop hashing is reused.
+- [x] No storage account is created for pure Memo Drop.
+- [x] Network fee is estimated separately.
+- [x] Protocol fee is displayed separately.
+- [x] Storage funding is not charged for Memo Drop.
+- [x] Transaction size is validated.
+- [x] Transaction is signed by the user's wallet.
+- [x] Transaction is confirmed.
+- [x] Transaction signature is displayed.
+- [x] Explorer link works.
+- [x] Memo can be independently verified.
+- [x] Hash verification works.
+- [x] Errors are handled cleanly.
+- [x] Storage Drop still works.
+- [x] Existing tests pass.
+- [x] New Memo Drop tests pass.
 - [ ] Devnet end-to-end test succeeds.
 
 ---
 
-## 26. Engineering Rule
+## 23. Engineering Rule
 
 Do not duplicate HashDrop logic.
 
@@ -738,21 +488,9 @@ Reuse existing:
 
 Memo Drop should be an additional publication adapter, not a second application.
 
-Recommended architectural concept:
-
-```text
-PublicationService
-       |
-       +---- MemoPublisher
-       |
-       +---- StoragePublisher
-```
-
-The exact implementation should follow the existing project architecture rather than introducing unnecessary abstraction.
-
 ---
 
-## 27. Official References
+## 24. Official References
 
 Solana — Add a Memo to a Transaction:
 https://solana.com/developers/cookbook/transactions/add-memo
@@ -772,7 +510,7 @@ Canonical SPL Memo program address:
 
 ---
 
-## 28. Final Principle
+## 25. Final Principle
 
 HashDrop should make the simplest path cheap and obvious:
 

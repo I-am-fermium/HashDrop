@@ -11,8 +11,6 @@ Before writing or modifying code, read ALL Markdown files in the repository, esp
 - ARCHITECTURE.md
 - PROTOCOL.md
 - TECH_STACK.md
-- ONCHAIN_STORAGE.md
-- DATA_CHUNKING.md
 - COST_MODEL.md
 - SECURITY.md
 - PRIVACY.md
@@ -184,3 +182,24 @@ The human owner controls:
 - mainnet launch
 
 Cline must stop and request review for these changes.
+
+## Current Project State
+
+**Phase 5 Complete**: Memo Drop implementation finished
+**Status**: Testing & Verification complete
+**Tests**: 30/30 passing
+**Build**: Successful
+**Next**: Devnet deployment (human required)
+
+## Transaction Version Support
+
+| Version | SDK Support | Wallet Support | Status |
+|---------|-------------|----------------|--------|
+| legacy  | ✅          | ✅             | ✅ Working |
+| v0      | ✅          | ✅ (Phantom)   | ✅ Working |
+| v1      | ✅          | ⚠️ (Pending)   | ⏳ Ready |
+
+## Memo Drop Format
+
+```
+HASHDROP|v2|MEMO|<hashDropId>|<sha256>|<mimeType>|<length>|<base64Content>

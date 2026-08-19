@@ -28,7 +28,7 @@ This task is specifically to upgrade the **Memo Drop transaction capacity and tr
 
 ---
 
-# 1. CURRENT PROBLEM
+## 1. CURRENT PROBLEM
 
 The HashDrop application currently uses an application-level content limit of approximately:
 
@@ -74,7 +74,7 @@ The actual content capacity is smaller than 4096 bytes.
 
 ---
 
-# 2. SOLANA NETWORK FACT
+## 2. SOLANA NETWORK FACT
 
 Solana's larger transaction-size upgrade raises the maximum transaction size from:
 
@@ -115,7 +115,7 @@ https://solana.com/upgrades/larger-transaction-sizes
 
 ---
 
-# 3. PRIMARY OBJECTIVE
+## 3. PRIMARY OBJECTIVE
 
 Upgrade the existing Memo Drop system so that it:
 
@@ -132,7 +132,7 @@ Upgrade the existing Memo Drop system so that it:
 
 ---
 
-# 4. DO NOT CHANGE
+## 4. DO NOT CHANGE
 
 DO NOT modify:
 
@@ -153,223 +153,75 @@ Only modify transaction construction, transaction-version selection, size valida
 
 ---
 
-# 5. FIRST: INSPECT THE CURRENT PROJECT
+## 5. CURRENT STATUS
 
-Before editing, search the project for:
+### Current Transaction Type
 
-```text
-1024
-1000
-1KB
-1 KB
-MAX_CONTENT_SIZE
-MAX_MEMO_SIZE
-MEMO_MAX_SIZE
-MAX_TRANSACTION_SIZE
-1232
-transaction size
-serialize()
-Transaction
-VersionedTransaction
-MessageV0
-legacy
-v0
-v1
-```
+**v0 transactions** (1232-byte limit)
 
-Also inspect:
+Due to Phantom wallet v1 signing limitations, the application currently builds v0 transactions.
 
-```text
-Memo Drop transaction builder
-Memo instruction builder
-Solana connection
-wallet sendTransaction
-size validation
-cost estimation
-publish validation
-```
+### Current 1024-byte Restriction Location
 
-Report:
+The 1024-byte limit is enforced in `src/lib/transactions.ts` and `src/lib/constants.ts` as a safety margin.
 
-```text
-Current content limit:
-Current transaction type:
-Current transaction builder:
-Current Memo builder:
-Current size validation:
-Current wallet signing method:
-Files that need modification:
-```
+### Current Solana SDK Version
 
-DO NOT edit until this inspection is complete.
+- `@solana/web3.js`: 1.98.4
+- `@solana/kit`: 7.1.1
+
+### Current Wallet Adapter Version
+
+- Direct `window.solana` API (Phantom/Brave)
+- `@solana/wallet-adapter-react`: 0.15.39
+
+### V1 SDK Support
+
+✅ **Available** (web3.js 1.98.4, Kit 7.1.1)
+
+### V1 Wallet Support
+
+⚠️ **Pending** (Phantom does not fully support v1 transaction signing)
+
+### Devnet v1 Availability
+
+✅ **Available** (Devnet supports v1 transactions)
+
+### Files Requiring Changes
+
+- `src/lib/transactions.ts` - Transaction building
+- `src/lib/constants.ts` - Transaction size limits
+- `src/lib/solana/transactionCapabilities.ts` - Capability detection
+- `src/components/PublishButton.tsx` - Size validation UI
+- `src/hooks/usePublish.ts` - Publishing flow
 
 ---
 
-# 6. PRESERVE V2 MEMO FORMAT
+## 6. V1 TRANSACTION IMPLEMENTATION
 
-The existing V2 Memo remains:
+### Current Implementation
 
-```text
-HASHDROP|v2|MEMO|<hashDropId>|<sha256>|<mimeType>|<length>|<base64Content>
-```
-
-Do NOT change this protocol in this task.
-
-The upgrade is about the Solana transaction container, not the V2 Memo protocol.
-
----
-
-# 7. IMPORTANT: BASE58 / BASE64
-
-Do not change the existing working encoding model.
-
-Solana instruction representation:
-
-```text
-RPC instruction data
-↓
-Base58 decode when required
-↓
-Memo bytes
-↓
-UTF-8
-```
-
-V2 content:
-
-```text
-Base64 content field
-↓
-original content bytes
-```
-
-The transaction-size upgrade must not change these encoding rules.
-
----
-
-# 8. CURRENT LEGACY/V0 SUPPORT
-
-First determine exactly how the existing app constructs transactions.
-
-If it currently uses:
+The application currently uses v0 transactions:
 
 ```ts
-new Transaction()
+// Current approach
+const transaction = new VersionedTransaction(message);
+// Uses compileToV0Message() internally
 ```
 
-or:
+### Target Implementation
+
+When Phantom adds v1 support, the application will use:
 
 ```ts
-TransactionMessage.compileToV0Message()
+// Target approach
+const transaction = new VersionedTransaction(message);
+// Uses compileToV1Message() when wallet supports it
 ```
-
-document that.
-
-Do NOT assume that replacing a class name automatically enables v1.
 
 ---
 
-# 9. V1 TRANSACTION IMPLEMENTATION
-
-Investigate the installed versions of:
-
-```text
-@solana/web3.js
-@solana/kit
-wallet-adapter
-```
-
-and determine whether the project's current dependencies can actually construct/sign/send Solana v1 transactions.
-
-If the installed SDK does not support v1:
-
-1. Do NOT fake v1 support.
-2. Do NOT serialize an invalid custom format.
-3. Determine the minimum dependency upgrade required.
-4. Report the required package/version changes.
-5. Only upgrade dependencies that are necessary for v1 support.
-6. Preserve current working V2 Memo functionality.
-
-The final application must use a real Solana v1 transaction format when claiming 4096-byte support.
-
----
-
-# 10. V1 AVAILABILITY MUST BE VERIFIED
-
-Do not hardcode:
-
-```text
-v1Available = true
-```
-
-without evidence.
-
-Determine whether the current target environment supports v1 transaction submission.
-
-The application should have a capability model conceptually like:
-
-```ts
-type SolanaTransactionCapabilities = {
-  supportsV1: boolean;
-  maxTransactionBytes: number;
-  preferredVersion: 'v1' | 'v0' | 'legacy';
-};
-```
-
-Adapt this to the project's architecture.
-
----
-
-# 11. DO NOT CLAIM 4096 IF V1 IS UNAVAILABLE
-
-If the connected network / SDK / wallet path cannot actually support v1:
-
-The application must NOT claim:
-
-```text
-4096 bytes available
-```
-
-Instead, safely use the currently supported transaction format and limit.
-
-For example:
-
-```text
-Legacy/V0:
-current supported transaction size
-
-V1:
-4096 bytes
-```
-
-The UI should reflect the actual active transaction version.
-
----
-
-# 12. TRANSACTION VERSION SELECTION
-
-Preferred logic:
-
-```text
-Can use v1?
-    YES
-      ↓
-Use v1
-      ↓
-4096-byte transaction ceiling
-
-    NO
-      ↓
-Use currently supported transaction format
-      ↓
-Use its real transaction ceiling
-```
-
-Do not silently call an oversized transaction "valid" because the content alone is under 4096 bytes.
-
----
-
-# 13. DYNAMIC TRANSACTION SIZE
+## 7. DYNAMIC TRANSACTION SIZE
 
 This is the most important implementation requirement.
 
@@ -415,11 +267,9 @@ if (transactionBytes > activeLimit) {
 }
 ```
 
-Use the correct serialization API for the installed SDK and transaction version.
-
 ---
 
-# 14. AVAILABLE CONTENT CAPACITY
+## 8. AVAILABLE CONTENT CAPACITY
 
 The UI should show the user the ACTUAL available capacity.
 
@@ -446,11 +296,10 @@ The exact calculation must come from the actual transaction.
 
 ---
 
-# 15. BUILD-BEFORE-VALIDATE
+## 9. BUILD-BEFORE-VALIDATE
 
 The correct order is:
 
-```text
 1. Convert content to UTF-8 bytes
 2. Calculate SHA-256
 3. Generate HashDrop ID
@@ -465,13 +314,12 @@ The correct order is:
 12. Request wallet approval
 13. Send
 14. Confirm
-```
 
 Do not validate using assumptions before building the actual transaction.
 
 ---
 
-# 16. SIZE MARGIN
+## 10. SIZE MARGIN
 
 Do NOT add an arbitrary huge safety margin that unnecessarily reduces capacity.
 
@@ -491,11 +339,32 @@ serializedTransaction.length <= 4096
 
 is the final condition.
 
-If the SDK/wallet requires additional constraints, document them explicitly.
+---
+
+## 11. TRANSACTION VERSION SELECTION
+
+Preferred logic:
+
+```text
+Can use v1?
+    YES
+      ↓
+Use v1
+      ↓
+4096-byte transaction ceiling
+
+    NO
+      ↓
+Use currently supported transaction format
+      ↓
+Use its real transaction ceiling
+```
+
+Do not silently call an oversized transaction "valid" because the content alone is under 4096 bytes.
 
 ---
 
-# 17. V1 TRANSACTION FORMAT
+## 12. V1 TRANSACTION FORMAT
 
 Do not confuse:
 
@@ -522,43 +391,24 @@ Do not pretend legacy/v0 has a 4096-byte ceiling.
 
 ---
 
-# 18. IMPORTANT V1 DETAIL
+## 13. WALLET SUPPORT
 
-Solana's v1 transaction format is a real protocol format.
+The application uses direct `window.solana` API for Phantom/Brave wallet compatibility.
 
-Do not implement a fake local "v1" type.
+### Current Wallet Support
 
-Do not prepend arbitrary bytes.
+- Phantom: v0 transactions ✅
+- Brave: v0 transactions ✅
 
-Do not create a custom serializer unless the official SDK/protocol implementation requires it.
+### V1 Wallet Support
 
-Use the official supported Solana SDK APIs for v1 transaction construction.
+⚠️ **Pending** - Phantom does not fully support v1 transaction signing
 
----
-
-# 19. WALLET SUPPORT
-
-Inspect the existing wallet adapter.
-
-Verify whether the connected wallet can:
-
-1. accept v1 transactions
-2. sign v1 transactions
-3. send v1 transactions
-
-Do NOT break wallets that currently support legacy/v0.
-
-If wallet v1 support is unavailable:
-
-```text
-do not claim 4096 support
-```
-
-and provide a clear developer diagnostic.
+When Phantom adds v1 support, the application will automatically use it.
 
 ---
 
-# 20. DEVNET TESTING
+## 14. DEVNET TESTING
 
 The development target is:
 
@@ -581,7 +431,7 @@ Do not declare success based only on local serialization.
 
 ---
 
-# 21. TEST THE SIZE BOUNDARY
+## 15. TEST THE SIZE BOUNDARY
 
 Create tests for:
 
@@ -639,13 +489,9 @@ Generate:
 
 Must be rejected before wallet signing.
 
-IMPORTANT:
-
-These tests must generate content based on ACTUAL serialized transaction size rather than assuming content length equals transaction length.
-
 ---
 
-# 22. TEST UNICODE
+## 16. TEST UNICODE
 
 Test:
 
@@ -671,7 +517,7 @@ Do NOT use JavaScript string `.length` for transaction capacity calculations.
 
 ---
 
-# 23. TEST BASE64 OVERHEAD
+## 17. TEST BASE64 OVERHEAD
 
 The current V2 protocol Base64-encodes content.
 
@@ -693,7 +539,7 @@ Make the actual size visible during development.
 
 ---
 
-# 24. HASHDROP USER EXPERIENCE
+## 18. HASHDROP USER EXPERIENCE
 
 The Publish page should display something like:
 
@@ -727,7 +573,7 @@ There is no Storage Drop.
 
 ---
 
-# 25. REMOVE THE OLD 1024-BYTE LIMIT
+## 19. REMOVE THE OLD 1024-BYTE LIMIT
 
 Find the existing source of the `1024`/`1KB` limit.
 
@@ -739,7 +585,7 @@ Replace it with dynamic transaction serialization validation.
 
 ---
 
-# 26. IMPORTANT: DO NOT BREAK EXISTING V2
+## 20. IMPORTANT: DO NOT BREAK EXISTING V2
 
 The following currently working transaction must remain retrievable:
 
@@ -768,7 +614,7 @@ The Retrieve page must still show:
 
 ---
 
-# 27. PUBLISH ACCEPTANCE TEST
+## 21. PUBLISH ACCEPTANCE TEST
 
 After the upgrade, create a new larger Memo Drop.
 
@@ -800,7 +646,7 @@ SHA-256
 
 ---
 
-# 28. VERIFY ACTUAL TRANSACTION VERSION
+## 22. VERIFY ACTUAL TRANSACTION VERSION
 
 After publishing, retrieve the transaction and inspect:
 
@@ -826,7 +672,7 @@ while claiming the application is using the 4096-byte limit.
 
 ---
 
-# 29. RETRIEVAL COMPATIBILITY
+## 23. RETRIEVAL COMPATIBILITY
 
 The existing retrieval page must remain able to handle:
 
@@ -844,7 +690,7 @@ Do not rewrite the successful Memo parser unnecessarily.
 
 ---
 
-# 30. IMPORTANT: getTransaction
+## 24. IMPORTANT: getTransaction
 
 The current retrieval system already works.
 
@@ -864,7 +710,7 @@ Do not break current legacy/V0 retrieval.
 
 ---
 
-# 31. COST
+## 25. COST
 
 Do not assume larger transactions cost exactly the same in all network conditions.
 
@@ -878,7 +724,7 @@ Larger transactions may be affected by prioritization conditions; do not hardcod
 
 ---
 
-# 32. NO STORAGE DROP
+## 26. NO STORAGE DROP
 
 Absolutely do NOT reintroduce:
 
@@ -900,7 +746,7 @@ The application rejects it.
 
 ---
 
-# 33. TEST MATRIX
+## 27. TEST MATRIX
 
 Run:
 
@@ -925,7 +771,7 @@ Run:
 
 ---
 
-# 34. DEBUGGING
+## 28. DEBUGGING
 
 Add temporary development diagnostics:
 
@@ -959,58 +805,58 @@ Do not log secrets.
 
 ---
 
-# 35. FINAL ARCHITECTURE
+## 29. FINAL ARCHITECTURE
 
 The final Memo Drop architecture should be:
 
 ```text
-                     HASHDROP V2
+                      HASHDROP V2
 
-                       Content
-                          ↓
-                    UTF-8 bytes
-                          ↓
-                      SHA-256
-                          ↓
-                     HashDrop ID
-                          ↓
-                    V2 Memo Payload
-                          ↓
-              ┌───────────┴───────────┐
-              │                       │
-          v1 available          v1 unavailable
-              │                       │
-              ↓                       ↓
-        Solana v1 tx            existing supported tx
-              │
-              ↓
-      Dynamic serialize()
-              │
-              ↓
-       ≤ 4096 bytes
-              │
-              ↓
-        Wallet signs
-              │
-              ↓
-        Solana Devnet
-              │
-              ↓
-          Finalized
-              │
-              ↓
-          Retrieval
-              │
-              ↓
-       SHA-256 verify
-              │
-              ↓
-          ✅ VERIFIED
+                        Content
+                           ↓
+                     UTF-8 bytes
+                           ↓
+                       SHA-256
+                           ↓
+                      HashDrop ID
+                           ↓
+                     V2 Memo Payload
+                           ↓
+               ┌───────────┴───────────┐
+               │                       │
+           v1 available          v1 unavailable
+               │                       │
+               ↓                       ↓
+         Solana v1 tx            existing supported tx
+               │
+               ↓
+       Dynamic serialize()
+               │
+               ↓
+        ≤ 4096 bytes
+               │
+               ↓
+         Wallet signs
+               │
+               ↓
+         Solana Devnet
+               │
+               ↓
+           Finalized
+               │
+               ↓
+           Retrieval
+               │
+               ↓
+        SHA-256 verify
+               │
+               ↓
+           ✅ VERIFIED
 ```
 
 ---
 
-# 36. DO NOT DECLARE SUCCESS TOO EARLY
+## 30. DO NOT DECLARE SUCCESS TOO EARLY
 
 The upgrade is NOT complete merely because:
 
@@ -1035,7 +881,7 @@ It is complete only if:
 
 ---
 
-# 37. FINAL REQUIRED REPORT
+## 31. FINAL REQUIRED REPORT
 
 Before editing:
 
@@ -1089,7 +935,7 @@ PASS/FAIL
 
 ---
 
-# FINAL INSTRUCTION
+## 32. FINAL INSTRUCTION
 
 Do not rewrite HashDrop.
 
