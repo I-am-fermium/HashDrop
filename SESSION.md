@@ -4,72 +4,84 @@
 
 This file records the current state of AI-assisted development so Cline can continue work without guessing.
 
-## Current status
+## Current Status
 
-Phase 0 — Specification complete. Phase 1 (Static UI) complete. Phase 2 (Local Content Engine) complete. Phase 3 (Wallet Integration) complete. Phase 4 (Solana Program) complete. Phase 5 (Storage Economics) complete. Phase 6 (End-to-End ON-CHAIN Drop) complete. Phase 7 (Security & Testing) complete.
+Phase 0 — Specification complete. Phase 1 (Static UI) complete. Phase 2 (Local Content Engine) complete. Phase 3 (Wallet Integration) complete. Phase 4 (Memo Drop) complete. Phase 5 (Testing & Verification) complete.
 
-**Recent Updates (8/15/2026):**
-- ✅ Fixed wallet disconnect issue - now properly clears state and localStorage
-- ✅ Fixed publish method selection - radio buttons now work correctly  
-- ✅ Fixed all Tailwind CSS class issues (replaced `text-background` with `text-white`)
-- ✅ **Fixed transaction signing** - Added support for Phantom's `signAndSendTransaction` method
-- ✅ **Added payment confirmation modal** - Shows cost and details before actual payment
-- ✅ All components working: WalletConnect, ContentEditor, PublishButton, CostSummary
+**Recent Updates (2026-08-18):**
+- ✅ Analyzed Solana v1 readiness - SDK supports v1, wallet support pending
+- ✅ Updated documentation files to reflect current project state
+- ✅ Updated CHANGELOG.md with complete phase history
+- ✅ Updated ROADMAP.md with current phase status
+- ✅ Updated ARCHITECTURE.md with transaction version details
+- ✅ Updated TECH_STACK.md with actual package versions
+- ✅ Updated TESTING.md with test results and coverage
 
-## Key Fixes
+## Key Findings
 
-### Wallet Disconnect Issue
-Fixed by:
-- Using `useRef` to maintain the wallet provider instance across renders
-- Properly handling the `isDisconnectingRef` to prevent race conditions
-- Clearing localStorage `phantom-key` on disconnect
-- Setting state to null and resetting `isConnected` to false
+### Solana v1 Transaction Support
+- **SDK Support**: ✅ Available (web3.js 1.98.4, Kit 7.1.1)
+- **Wallet Support**: ⚠️ Phantom does NOT fully support v1 transaction signing
+- **Network Support**: ✅ Devnet supports v1 transactions
+- **Current Implementation**: v0 transactions (1232-byte limit)
+- **Target Implementation**: v1 transactions (4096-byte limit) when Phantom adds support
 
-### Publish Method Selection
-The radio buttons were working but needed better UI feedback:
-- Added "SELECTED" indicator for active method
-- Only shows "SELECTED" when the method is active and available
+### Transaction Building
+- Currently uses `compileToV0Message()` for Phantom compatibility
+- Code has `compileToV1Message()` support ready in SDK
+- Transaction size validation uses actual serialization
+- UI displays transaction version dynamically
 
-### Transaction Signing Issue (CRITICAL FIX)
-Fixed by:
-- Added support for Phantom's `signAndSendTransaction` method
-- Added fallback to `signTransaction` + `sendRawTransaction` for other wallets
-- Kept `sendTransaction` as third fallback for backward compatibility
-- This fixes the critical error: "provider.sendTransaction is not a function"
-
-### Payment Confirmation Modal (NEW)
-Added before the publish action:
-- Shows method type (Memo Drop / Storage Drop)
-- Shows estimated cost in SOL
-- Shows content size and HashDrop ID
-- Warning message about Solana transaction
-- Cancel and Confirm buttons
-
-### Tailwind CSS Issues
-Fixed invalid Tailwind classes:
-- Changed `text-background` to `text-white` in viewer.tsx (line 69)
-- This was causing rendering issues because `text-background` is not a valid Tailwind class
+### Verification
+- Supports legacy, v0, and v1 transactions
+- Uses `maxSupportedTransactionVersion: 1` for retrieval
+- All 30 tests passing
 
 ## Files Modified
 
-### Critical Files
-- `src/hooks/useWallet.ts` - Complete rewrite for Phantom compatibility with transaction signing
-- `src/app/page.tsx` - Added confirmation modal before publish, fixed method selection
-
-### Other Files
-- `src/app/viewer.tsx` - Fixed Tailwind CSS class
-- `src/hooks/usePublish.ts` - Ready for implementation
-- `src/lib/transactions.ts` - Fixed import paths
+### Documentation
+- `CHANGELOG.md` - Updated with complete phase history
+- `ROADMAP.md` - Updated with current phase status and v1 notes
+- `ARCHITECTURE.md` - Updated with transaction version details
+- `TECH_STACK.md` - Updated with actual package versions
+- `TESTING.md` - Updated with test results and coverage
 
 ## Testing Status
+
 - ✅ All 30 tests passing
 - ✅ TypeScript compilation clean
 - ✅ Build successful
 - ✅ Dev server running at http://localhost:3000
 
-## Next Steps (Devnet Deployment - Human Required)
+## Next Steps
 
-- [ ] Install Solana CLI (requires admin rights, run: `sh install-solana.sh`)
+### Immediate (Human Required)
+- [ ] Install Solana CLI (requires admin rights)
 - [ ] Build and deploy Solana program: `cd contracts && cargo build-sbf`
-- [ ] Update PROGRAM_ID in `src/lib/constants.ts` with deployed program ID
+- [ ] Update PROGRAM_ID in `src/lib/constants.ts`
 - [ ] Test end-to-end publishing with Phantom wallet on devnet
+
+### Future (When Phantom adds v1 support)
+- [ ] Update transaction builder to use `compileToV1Message()`
+- [ ] Test v1 transactions on Devnet
+- [ ] Update UI to display v1 transaction info
+- [ ] Verify 4096-byte transaction limit works
+
+## Current Transaction Limits
+
+| Version | Max Size | Effective Content |
+|---------|----------|-------------------|
+| v0      | 1232 B   | ~800 B (base64)   |
+| v1      | 4096 B   | ~2800 B (base64)  |
+
+## Memo Drop Format
+
+```
+HASHDROP|v2|MEMO|<hashDropId>|<sha256>|<mimeType>|<length>|<base64Content>
+```
+
+## Known Issues
+
+1. Phantom wallet does not fully support v1 transaction signing
+2. Content limit is ~800 bytes (v0 transaction limit)
+3. Devnet deployment pending human approval

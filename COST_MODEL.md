@@ -52,3 +52,44 @@ Solana Network Fee
 ```
 
 No storage funding is required for Memo Drop publications.
+
+## Transaction Version Costs
+
+### v0 Transactions (Current)
+- Protocol Fee: 0.001 SOL
+- Network Fee: ~0.000005 SOL
+- **Total: ~0.001005 SOL**
+
+### v1 Transactions (Target)
+- Protocol Fee: 0.001 SOL
+- Network Fee: ~0.000005 SOL
+- **Total: ~0.001005 SOL**
+
+## Cost Calculation
+
+The cost is calculated as:
+
+```typescript
+const PROTOCOL_FEE_SOL = 0.001;
+const NETWORK_FEE_SOL = 0.000005;
+const TOTAL = PROTOCOL_FEE_SOL + NETWORK_FEE_SOL;
+```
+
+## Fee Transparency
+
+Users see:
+
+1. Protocol Fee: 0.001 SOL
+2. Network Fee: ~0.000005 SOL
+3. Total: ~0.001005 SOL
+
+## No Storage Funding
+
+For Memo Drop:
+
+- No separate HashDrop storage account
+- No rent funding required
+- No chunking
+- No storage account creation
+
+The transaction itself is the publication record.

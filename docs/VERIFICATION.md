@@ -19,23 +19,31 @@ For Memo Drop publications, verification works as follows:
 ```
 Transaction Signature
            ↓
-    Fetch Transaction
+     Fetch Transaction
            ↓
-    Find Memo Instruction
+     Find Memo Instruction
            ↓
-    Decode HashDrop Payload
+     Decode HashDrop Payload
            ↓
-    Recompute Content Hash
+     Recompute Content Hash
            ↓
-    Verify Hash Match
+     Verify Hash Match
            ↓
-    ✅ VERIFIED
+     ✅ VERIFIED
 ```
 
 The memo payload format is:
-`HASHDROP|v2|MEMO|<hashDropId>|<sha256>|<mimeType>|<length>|<base64Content>`
+`HASHDROP|v2|MEMO|hashDropId|sha256|mimeType|length|base64Content`
 
 Connection to the Solana network is required for verification. The transaction signature served as the HashDrop identifier.
+
+## Transaction Version Support
+
+The verification engine supports:
+
+- **Legacy transactions**: Version undefined
+- **v0 transactions**: Version 0
+- **v1 transactions**: Version 1 (ready)
 
 ## V2 Verification Process
 
@@ -48,3 +56,16 @@ Connection to the Solana network is required for verification. The transaction s
 7. Compare with the on-chain hash
 
 If all checks pass, the HashDrop is verified as authentic.
+
+## Verification Result
+
+When verified successfully, displays:
+
+- ✅ VERIFIED
+- HashDrop ID
+- Content
+- SHA-256 hash
+- MIME type
+- Content size
+- Transaction signature
+- Transaction version (legacy/v0/v1)

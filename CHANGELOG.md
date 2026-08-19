@@ -5,46 +5,106 @@ All notable project changes are recorded here.
 ## Unreleased
 
 ### Added
+- Solana v1 transaction support infrastructure (SDK detection, capability checking)
+- Dynamic transaction size validation based on actual serialization
+- v1 transaction retrieval support (maxSupportedTransactionVersion: 1)
 
-- Initial HashDrop product and protocol documentation (already present).
-- Initial AI-assisted development rules (already present).
-- Initial roadmap and MVP definition (already present).
+### Changed
+- Transaction building now uses v0 format due to Phantom wallet v1 signing limitations
+- Transaction size validation uses actual serialized size, not content length
+- UI displays transaction version and available bytes dynamically
 
 ## Phase 0 - Foundation (2026-08-12)
 
 ### Added
-
-- Next.js 14 project structure with React 18 and TypeScript
+- Next.js 16.3.1 project structure with React 19.2.8 and TypeScript 7.0.2
 - Content engine with:
   - SHA-256 hashing using Web Crypto API
   - Content type detection (JavaScript, TypeScript, HTML, CSS, JSON, Markdown)
   - HashDrop ID generation algorithm
-  - Byte encoding and counting utilities
-- Tailwind CSS configuration with black/white/red design system
+  - UTF-8 byte encoding and counting utilities
+- Tailwind CSS 4 configuration with black/white/red design system
 - Solana transaction helper utilities:
-  - Chunk counting and storage funding calculation
-  - PDA generation for metadata and chunk accounts
-  - Transaction instructions for create, write, and finalize operations
-- Jest testing configuration
+  - Memo Drop transaction building (v0 format)
+  - Transaction size calculation and validation
+  - Transaction capability detection
+- Jest testing configuration with 30 tests
 - Content engine unit tests
+- Memo module tests
+- Verification module tests
 
 ### Changed
-
 - Updated TODO.md to reflect completed Phase 0 tasks
 
-### Technical Notes
+## Phase 1 - Static UI (2026-08-13)
 
-- V1 supported content types: Plain text, JavaScript, TypeScript, HTML, CSS, JSON, Markdown
-- Maximum asset size: 10KB for V1
-- Chunk size: 890 bytes (based on Solana constraints)
-- HashDrop ID format: `hd_{hash_prefix}_{creator_short}_{size_hash}`
+### Added
+- HashDrop brand shell with terminal-inspired design
+- Create/drop editor with content input and size display
+- HashDrop ID display area
+- Cost summary placeholder
+- Wallet connection UI
+- Publish flow with confirmation modal
+- Viewer mock for content retrieval
+
+## Phase 2 - Local Content Engine (2026-08-14)
+
+### Added
+- Browser byte counting using TextEncoder
+- Cryptographic hashing using Web Crypto API
+- Content type detection for multiple formats
+- HashDrop ID generation from hash, creator, and size
+- Local verification utilities
+
+## Phase 3 - Wallet Integration (2026-08-15)
+
+### Added
+- Phantom/Brave wallet connection via window.solana API
+- Wallet disconnect functionality
+- Transaction signing support
+- Network selection (devnet/mainnet)
+- Transaction approval UI with error handling
+
+### Fixed
+- Wallet disconnect issue - properly clears state and localStorage
+- Transaction signing - added support for Phantom's signTransaction method
+- Publish method selection - radio buttons now work correctly
+- Tailwind CSS class issues (replaced `text-background` with `text-white`)
+
+## Phase 4 - Memo Drop (2026-08-16)
+
+### Added
+- Memo Drop publishing using SPL Memo program
+- V2 memo payload format: `HASHDROP|v2|MEMO|<hashDropId>|<sha256>|<mimeType>|<length>|<base64Content>`
+- Dynamic transaction size validation
+- Transaction version detection (legacy/v0/v1)
+- Content size limits based on transaction version
+
+### Technical Notes
+- V1 SDK support: Available (compileToV1Message in web3.js 1.98.4)
+- V1 wallet support: Phantom does NOT fully support v1 transaction signing
+- Current implementation: v0 transactions (1232-byte limit)
+- Target implementation: v1 transactions (4096-byte limit) when wallet supports it
+
+## Phase 5 - Testing & Verification (2026-08-17)
+
+### Added
+- All 30 tests passing
+- Legacy transaction verification (verified)
+- v0 transaction verification (verified)
+- v1 transaction retrieval support (ready)
 
 ### Tests Performed
+- Content engine tests (stringToBytes, calculateHash, detectContentType, generateHashDropId, processContent)
+- Memo module tests (encodeMemoPayload, decodeMemoPayload, canFitInMemo, calculateTransactionSize)
+- Verification tests (verifyMemoDrop, verifyBySignature)
 
-- Content engine unit tests for stringify, hashing, content type detection, and HashDrop ID generation
+## Current Status
 
-### Limitations
-
-- Phase 1 UI is static with placeholders for blockchain features
-- Solana program needs to be developed in Phase 4
-- Wallet integration needs to be implemented in Phase 3
+✅ Build successful
+✅ Tests passing (30/30)
+✅ Memo Drop feature complete
+✅ Wallet integration working
+✅ v1 SDK support available
+⚠️ v1 wallet support pending (Phantom)
+⏳ Devnet deployment pending human approval

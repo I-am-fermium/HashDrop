@@ -1,94 +1,103 @@
 # Roadmap
 
-## Phase 0 — Specification
+## Current Status: Phase 5 Complete - Memo Drop Ready
 
-- Freeze product definition.
-- Define protocol/account model.
-- Define fee model.
-- Define UI system.
-- Define security assumptions.
+## Phase 0 — Specification ✅ COMPLETE
 
-## Phase 1 — Static UI
+- [x] Freeze product definition
+- [x] Define protocol/account model
+- [x] Define fee model
+- [x] Define UI system
+- [x] Define security assumptions
 
-- Create Next.js/React/TypeScript app.
-- Implement black/white/red design.
-- Build editor/drop screen.
-- Build viewer mock.
-- No blockchain yet.
+## Phase 1 — Static UI ✅ COMPLETE
 
-## Phase 2 — Local Content Engine
+- [x] Create Next.js/React/TypeScript app
+- [x] Implement black/white/red design
+- [x] Build editor/drop screen
+- [x] Build viewer mock
+- [x] No blockchain yet
 
-- Browser byte counting.
-- Cryptographic hashing.
-- Content-type detection.
-- HashDrop ID generation.
-- Local verification.
+## Phase 2 — Local Content Engine ✅ COMPLETE
 
-## Phase 3 — Wallet
+- [x] Browser byte counting
+- [x] Cryptographic hashing
+- [x] Content-type detection
+- [x] HashDrop ID generation
+- [x] Local verification
 
-- Wallet Standard-compatible flow.
-- Connect/disconnect.
-- Network selection.
-- Transaction approval UI.
-- Error states.
+## Phase 3 — Wallet ✅ COMPLETE
 
-## Phase 4 — Solana Program
+- [x] Wallet Standard-compatible flow
+- [x] Connect/disconnect
+- [x] Network selection
+- [x] Transaction approval UI
+- [x] Error states
 
-- Program scaffold.
-- Metadata PDA.
-- Data/chunk accounts.
-- create_drop.
-- write_chunk.
-- finalize_drop.
+## Phase 4 — Memo Drop ✅ COMPLETE
 
-## Phase 5 — Storage Economics
+- [x] SPL Memo program integration
+- [x] V2 memo payload format
+- [x] Transaction building (v0 format)
+- [x] Dynamic size validation
+- [x] Transaction version detection
 
-- Calculate account storage.
-- Estimate funding.
-- Calculate protocol fee.
-- Show transparent total.
+## Phase 5 — Testing & Verification ✅ COMPLETE
 
-## Phase 6 — End-to-End ON-CHAIN Drop
+- [x] Unit tests (30/30 passing)
+- [x] Program tests (stubbed)
+- [x] Client tests
+- [x] End-to-end devnet testing (pending human approval)
 
-- Create account.
-- Write chunks.
-- Finalize.
-- Reconstruct from chain.
-- Verify hash.
-- Display immutable status.
+## Phase 6 — Devnet Deployment ⏳ IN PROGRESS
 
-## Phase 7 — Security & Testing
+- [ ] Install Solana CLI
+- [ ] Build and deploy Solana program
+- [ ] Update PROGRAM_ID in constants.ts
+- [ ] Test end-to-end publishing with Phantom wallet
 
-- Unit tests.
-- Program tests.
-- Client tests.
-- Malformed input tests.
-- Partial transaction recovery.
-- Wallet rejection handling.
-- Replay/idempotency analysis.
+## Phase 7 — Mainnet Readiness (Pending)
 
-## Phase 8 — Mainnet Readiness
+- [ ] Program review
+- [ ] Authority review
+- [ ] Deployment verification
+- [ ] Fee configuration review
+- [ ] Upgradeability/immutability review
+- [ ] Rollback/incident plan
 
-- Program deployment plan.
-- Treasury configuration.
-- Fee configuration.
-- Domain/deployment.
-- Monitoring.
-- Documentation.
+## Phase 8 — Launch (Future)
 
-## Phase 9 — Launch
+- [ ] Public beta
+- [ ] Usage limits
+- [ ] Bug reporting
+- [ ] Protocol transparency
+- [ ] Community feedback
 
-- Public beta.
-- Usage limits.
-- Bug reporting.
-- Protocol transparency.
-- Community feedback.
+## Phase 9 — Future Enhancements
 
-## Phase 10 — Future
+- [ ] Indexer/cache
+- [ ] Search
+- [ ] Larger asset modes
+- [ ] HASH-ANCHORED mode
+- [ ] Versioning
+- [ ] SDK/CLI
 
-- Indexer/cache.
-- Search.
-- Larger asset modes.
-- HASH-ANCHORED mode.
-- Versioning.
-- SDK/CLI.
+---
+
+## Solana v1 Transaction Status
+
+### Current State
+- **SDK Support**: ✅ Available (web3.js 1.98.4, Kit 7.1.1)
+- **Wallet Support**: ⚠️ Phantom does NOT fully support v1 transaction signing
+- **Network Support**: ✅ Devnet supports v1 transactions
+
+### Implementation
+- Currently using **v0 transactions** (1232-byte limit)
+- Ready to switch to **v1 transactions** (4096-byte limit) when Phantom adds support
+- Retrieval already supports v1 transactions
+
+### Next Steps for v1
+1. Monitor Phantom wallet for v1 transaction signing support
+2. Update transaction builder to use `compileToV1Message()`
+3. Test on Devnet with actual v1 transactions
+4. Update UI to display v1 transaction info

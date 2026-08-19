@@ -1,17 +1,19 @@
-# Task Progress: HashDrop Retrieve — Restore Working Page + V0/V1 Transaction Compatibility
+# Task Progress: HashDrop Memo Drop Implementation
 
 ## Completed Tasks
 
 - [x] Analyze requirements and understand the codebase
-- [x] Identify the root cause: instanceof VersionedTransaction check fails for RPC responses
+- [x] Identify the root cause: Phantom wallet v1 signing not supported
 - [x] Fix verification.ts to detect transaction version from tx.version field
 - [x] Update test to reflect new error handling behavior
-- [x] Add second regression test
+- [x] Add second regression test for v0 transaction
 - [x] Fix instruction handling for v0 compiledInstructions
 - [x] Fix PublicKey resolution for v0 transactions
 - [x] Fix accountKeys for v0 transactions (use staticAccountKeys)
 - [x] Run all tests to verify the fix
 - [x] Verify the build succeeds
+- [x] Analyze Solana v1 readiness
+- [x] Update documentation files
 
 ## Summary of Changes
 
@@ -89,6 +91,37 @@ The retrieval engine is now version-agnostic and supports:
 - v0 → parse Memo
 - v1 → parse Memo (no hard-coded rejection)
 
+## Transaction Version Status
+
+| Version | SDK Support | Wallet Support | Status |
+|---------|-------------|----------------|--------|
+| legacy  | ✅          | ✅             | ✅ Working |
+| v0      | ✅          | ✅ (Phantom)   | ✅ Working |
+| v1      | ✅          | ⚠️ (Pending)   | ⏳ Ready |
+
+## Documentation Updates
+
+Updated the following files to reflect current project state:
+- `CHANGELOG.md` - Complete phase history
+- `ROADMAP.md` - Current phase status and v1 notes
+- `ARCHITECTURE.md` - Transaction version details
+- `TECH_STACK.md` - Actual package versions
+- `TESTING.md` - Test results and coverage
+- `SESSION.md` - Current state and next steps
+
 ## No Changes to Publishing
 
 The existing Publish system remains untouched as required.
+
+## Next Steps
+
+1. **Devnet Deployment** (Human Required):
+   - Install Solana CLI
+   - Build and deploy Solana program
+   - Update PROGRAM_ID in constants.ts
+   - Test end-to-end publishing
+
+2. **v1 Transaction Support** (When Phantom adds support):
+   - Update transaction builder to use `compileToV1Message()`
+   - Test v1 transactions on Devnet
+   - Update UI to display v1 transaction info

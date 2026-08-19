@@ -12,29 +12,23 @@ Users can publish small text and source-code assets without creating an account,
 
 - **No accounts**: Publish directly with your Solana wallet
 - **Transparent pricing**: See storage and fee costs before signing
-- **On-chain storage**: Content is stored directly on Solana
+- **On-chain storage**: Content is stored directly in Solana transaction memos
 - **Cryptographic verification**: Verify content hash matches published data
-- **Dual publication methods**:
-  - **Memo Drop**: For small content (< 1KB), uses SPL Memo program, no storage account needed
-  - **Storage Drop**: For larger content, uses account-backed storage
+- **Memo Drop**: For small content, uses SPL Memo program, no storage account needed
 
-## Publication Methods
+## Publication Method
 
 ### Memo Drop
 
-- Best for small content (under 1KB)
+- Best for small content (under 800 bytes)
 - Uses Solana's SPL Memo program
 - No storage account required
 - Lower cost (only protocol fee + network fee)
 - Content stored in transaction memo
 
-### Storage Drop
-
-- Best for larger content (1KB+)
-- Uses HashDrop on-chain storage accounts
-- Requires rent-funded storage accounts
-- Higher cost (protocol fee + storage rent + network fee)
-- Content stored in chunk accounts
+**Transaction Limits:**
+- **v0 (current)**: 1232 bytes max, ~800 bytes effective content
+- **v1 (target)**: 4096 bytes max, ~2800 bytes effective content (pending Phantom wallet support)
 
 ## Architecture
 
@@ -46,20 +40,21 @@ Users can publish small text and source-code assets without creating an account,
 - **`src/lib/`** - Utilities
   - `content.ts` - Content processing, SHA-256 hashing, HashDrop ID generation
   - `memo.ts` - Memo Drop encoding/decoding
-  - `transactions.ts` - Transaction builders for Storage and Memo Drop
+  - `transactions.ts` - Transaction builders
   - `verification.ts` - On-chain verification logic
   - `constants.ts` - Program IDs, network endpoints, sizes
   - `solana/networkCost.ts` - Network-authoritative cost calculation via RPC
 
-### Smart Contract (Rust/Solana)
+### Transaction Format
 
-- `contracts/src/lib.rs` - Program entry point with instruction routing
-- `contracts/src/instruction.rs` - Binary serialization for instructions
-- `contracts/src/state.rs` - Account structures (MetadataAccount: 1101 bytes, ChunkAccount: variable)
+- **Current**: v0 transactions (1232-byte limit)
+- **Target**: v1 transactions (4096-byte limit) when Phantom adds support
+- **SDK Support**: ✅ Available (web3.js 1.98.4, Kit 7.1.1)
+- **Wallet Support**: ⚠️ Phantom v1 signing pending
 
 ## Wallet Integration
 
-Uses direct `window.solana` API for compatibility with Phantom/br wallets, bypassing `@solana/wallet-adapter-react` which has SSR issues with Next.js.
+Uses direct `window.solana` API for compatibility with Phantom/br wallets.
 
 ## Development
 
@@ -100,7 +95,7 @@ HashDrop/
 │   └── Cargo.toml
 ├── src/               # Frontend (TypeScript/React)
 │   ├── app/           # Next.js app router
-│   ├── components/  # React components
+│   ├── components/    # React components
 │   ├── hooks/         # React hooks
 │   ├── lib/           # Utilities and types
 │   │   ├── content.ts    # Content engine
@@ -111,22 +106,11 @@ HashDrop/
 └── docs/            # Documentation
 ```
 
-## Protocol
+## Memo Drop Format
 
-The HashDrop protocol supports:
-- `create_drop` - Initialize a new publication
-- `write_chunk` - Write content chunks
-- `finalize_drop` - Finalize and seal the publication
-- `verify_drop` - Verify publication integrity
-
-## V1 Scope
-
-- Plain text and source code assets
-- Maximum 10KB content size
-- SHA-256 content hashing
-- Deterministic HashDrop ID generation
-- Memo Drop for small content
-- Storage Drop for larger content
+```
+HASHDROP|v2|MEMO|<hashDropId>|<sha256>|<mimeType>|<length>|<base64Content>
+```
 
 ## Testing
 
@@ -141,25 +125,24 @@ npm run test:watch
 npm run test:coverage
 ```
 
-## Configuration
-
-### Network Endpoints
-
-- Devnet: `https://api.devnet.solana.com`
-- Mainnet: `https://api.mainnet-beta.solana.com`
-
-### Program IDs
-
-- HashDrop Program: Configured in `src/lib/constants.ts`
-- SPL Memo Program: `Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH`
-
 ## Current Status
 
 ✅ Build successful
 ✅ Tests passing (30/30)
 ✅ Memo Drop feature complete
-✅ Storage Drop feature complete
 ✅ Wallet integration working
+✅ v1 SDK support available
+⚠️ v1 wallet support pending (Phantom)
+⏳ Devnet deployment pending human approval
+
+## Documentation
+
+- [README.md](README.md) - This file
+- [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture
+- [TECH_STACK.md](TECH_STACK.md) - Technology stack
+- [ROADMAP.md](ROADMAP.md) - Development roadmap
+- [TESTING.md](TESTING.md) - Testing strategy
+- [SESSION.md](SESSION.md) - Current session state
 
 ## License
 

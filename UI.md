@@ -44,6 +44,15 @@ The primary action should be obvious:
 - total
 - connect wallet / publish button
 
+## Transaction Info Display
+
+The UI displays transaction information:
+
+- **Transaction Version**: v0 (current), v1 (target)
+- **Transaction Size**: Actual serialized bytes
+- **Max Size**: 1232 (v0) or 4096 (v1)
+- **Available Bytes**: Remaining space for content
+
 ## Viewer
 
 Display:
@@ -70,3 +79,16 @@ The viewer must distinguish clearly between:
 ## Mobile
 
 The same critical lifecycle must work on small screens. Do not make desktop-only controls essential for publishing or verification.
+
+## Confirmation Modal
+
+Before publishing, shows:
+
+- Method: HashDrop Memo Drop
+- Content size
+- Protocol Fee: 0.001 SOL
+- Network Fee: ~0.000005 SOL
+- Total cost: ~0.001005 SOL
+- Transaction version: v0 (1232-byte limit)
+- Warning about Solana transaction
+- Cancel and Confirm buttons

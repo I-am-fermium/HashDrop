@@ -48,6 +48,25 @@ Never ask for or store:
 - API secrets
 - confidential files as if they were safe to publish
 
+## Transaction Security
+
+### Signature Verification
+
+Always verify:
+
+1. Transaction is signed by expected wallet
+2. Transaction is finalized on-chain
+3. Memo instruction is from canonical SPL Memo program
+4. Content hash matches
+
+### Replay Protection
+
+Solana transactions are single-use. Each transaction can only be confirmed once.
+
+### Idempotency
+
+Publishing the same content twice creates two separate transactions with different signatures.
+
 ## Mainnet
 
 Mainnet deployment requires:
@@ -59,4 +78,17 @@ Mainnet deployment requires:
 - upgradeability/immutability review
 - rollback/incident plan
 
-No production deployment should be performed automatically by Cline.
+No production deployment should be performed automatically from an AI coding session.
+
+## Security Checklist
+
+Before mainnet deployment:
+
+- [ ] Program code reviewed
+- [ ] Authority keys verified
+- [ ] Fee configuration reviewed
+- [ ] Upgrade authority disabled (if desired)
+- [ ] Treasury configuration verified
+- [ ] End-to-end tests pass
+- [ ] Security audit completed
+- [ ] Incident response plan documented

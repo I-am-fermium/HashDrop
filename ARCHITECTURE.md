@@ -4,24 +4,24 @@
 
 ```text
                HashDrop
-                  |
-            Content
-                  |
-            SHA-256
-                  |
-          HashDrop ID
-                  |
-          V2 Memo Drop
-                  |
-          Solana Devnet
-                  |
-        Transaction Signature
-                  |
-              Retrieval
-                  |
-          Content Verification
-                  |
-              ✅ VERIFIED
+                    |
+             Content
+                    |
+             SHA-256
+                    |
+           HashDrop ID
+                    |
+           V2 Memo Drop
+                    |
+           Solana Devnet
+                    |
+         Transaction Signature
+                    |
+               Retrieval
+                    |
+           Content Verification
+                    |
+               ✅ VERIFIED
 ```
 
 No Storage Drop.
@@ -59,6 +59,20 @@ Solana holds the canonical ON-CHAIN record.
 
 The SPL Memo program stores the content directly in the transaction instruction.
 
+### Transaction Types
+
+- **v0 transactions** (current): 1232-byte limit, used for Phantom wallet compatibility
+- **v1 transactions** (ready): 4096-byte limit, SDK support available, wallet support pending
+
+### Transaction Building
+
+1. Build TransactionMessage with memo instruction
+2. Compile to v0 message (current) or v1 message (target)
+3. Create VersionedTransaction
+4. Serialize and validate size
+5. Sign with wallet
+6. Send to Solana network
+
 ## Verification
 
 A HashDrop is VERIFIED ON-CHAIN only when:
@@ -95,3 +109,52 @@ The memo payload format is:
 `HASHDROP|v2|MEMO|hashDropId|sha256|mimeType|length|base64Content`
 
 No storage accounts are created. No chunking is needed. The transaction itself is the publication record.
+
+## Transaction Version Support
+
+### Current Implementation
+- **Version**: v0
+- **Max Size**: 1232 bytes
+- **Wallet Support**: Phantom, Brave (via signTransaction)
+
+### Target Implementation
+- **Version**: v1
+- **Max Size**: 4096 bytes
+- **Wallet Support**: Pending Phantom v1 signing support
+
+### Version Detection
+The application detects transaction capabilities at runtime:
+- Checks for `compileToV1Message()` in web3.js
+- Checks for `compileTransactionMessage()` in Kit
+- Falls back to v0 if v1 not supported by wallet
+
+## Content Size Limits
+
+| Transaction Version | Max Size | Effective Content |
+|---------------------|----------|-------------------|
+| legacy              | 1232 B   | ~800 B (base64)   |
+| v0                  | 1232 B   | ~800 B (base64)   |
+| v1                  | 4096 B   | ~2800 B (base64)  |
+
+## Wallet Integration
+
+Uses direct `window.solana` API for compatibility with Phantom/Brave wallets.
+
+### Supported Operations
+- `connect()` - Connect wallet
+- `disconnect()` - Disconnect wallet
+- `signTransaction()` - Sign VersionedTransaction
+- `sendRawTransaction()` - Send serialized transaction
+
+### Wallet States
+- disconnected
+- connecting
+- connected
+- transaction awaiting approval
+- transaction submitted
+- confirmation pending
+- confirmed
+- rejected
+- expired
+- insufficient funds
+- RPC failure

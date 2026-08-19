@@ -42,26 +42,43 @@ Copy the program ID from the deployment output and update `src/lib/constants.ts`
 export const PROGRAM_ID = 'YOUR_PROGRAM_ID_HERE';
 ```
 
-## Step 5: Test the Application
-1. Start the development server:
-   ```bash
-   cd d:\VSCode\HashDrop
-   npm run dev
-   ```
+## Step 5: Start the Development Server
+```bash
+cd d:\VSCode\HashDrop
+npm run dev
+```
 
-2. Open http://localhost:3000 in your browser
+## Step 6: Test the Application
 
-3. Connect your Phantom wallet
+1. Open http://localhost:3000 in your browser
+2. Connect your Phantom wallet (make sure it's set to devnet)
+3. Enter content in the editor
+4. Click **Publish**
+5. A confirmation dialog will show:
+   - Method: HashDrop Memo Drop
+   - Content size
+   - Protocol Fee: 0.001 SOL
+   - Network Fee: ~0.000005 SOL
+   - Total cost: ~0.001005 SOL
+   - Transaction version: v0 (1232-byte limit)
+6. Click **Confirm & Sign** to sign the transaction in Phantom
+7. Wait for the transaction to complete
 
-4. Enter content and select:
-   - **Memo Drop** for small content (< 1KB)
-   - **Storage Drop** for larger content
-
-5. Click Publish and sign the transaction in Phantom
-
-## Step 6: Verify Publication
+## Step 7: Verify Publication
 - Check the transaction signature in the UI
 - View on Solana Explorer: https://explorer.solana.com/?tx=<signature>&cluster=devnet
+
+## Transaction Version Notes
+
+### Current Implementation (v0)
+- **Max Size**: 1232 bytes
+- **Effective Content**: ~800 bytes (after base64 encoding)
+- **Wallet Support**: Phantom, Brave
+
+### Target Implementation (v1)
+- **Max Size**: 4096 bytes
+- **Effective Content**: ~2800 bytes (after base64 encoding)
+- **Wallet Support**: Pending Phantom v1 signing support
 
 ## Troubleshooting
 
@@ -77,14 +94,41 @@ export const PROGRAM_ID = 'YOUR_PROGRAM_ID_HERE';
 - Verify network is set to devnet
 - Check transaction details in Solana Explorer
 
-## Memo Drop Testing
+### Program not found
+- Make sure you updated the PROGRAM_ID in constants.ts
+- Restart the dev server after updating
 
-### Test Cases
-1. **Small text content** - Should use Memo Drop
-2. **Unicode content** (emoji, Chinese characters) - Should work correctly
-3. **Large content** - Should recommend Storage Drop
-4. **Empty content** - Should handle gracefully
+## Expected Costs
 
-### Verification
-- Memo Drop: Verify by fetching transaction and checking memo instruction
-- Storage Drop: Verify by fetching account data and reconstructing content
+### Memo Drop
+- Protocol Fee: 0.001 SOL
+- Network Fee: ~0.000005 SOL
+- **Total: ~0.001005 SOL**
+
+## Content Size Limits
+
+### Memo Drop (Current - v0)
+- **Max Transaction Size**: 1232 bytes
+- **Effective Content**: ~800 bytes (after base64 encoding)
+- **Recommendation**: Keep content under 700 bytes for safety
+
+### Memo Drop (Target - v1)
+- **Max Transaction Size**: 4096 bytes
+- **Effective Content**: ~2800 bytes (after base64 encoding)
+- **Status**: Ready when Phantom adds v1 support
+
+## Testing Content Sizes
+
+Test with various content sizes:
+- 100 bytes - Should publish
+- 500 bytes - Should publish
+- 800 bytes - Should publish (near v0 limit)
+- 1000 bytes - Should fail (exceeds v0 limit)
+
+## Verification
+
+After publishing:
+1. Copy the transaction signature
+2. Go to https://explorer.solana.com/?tx=<signature>&cluster=devnet
+3. Find the Memo instruction in the transaction
+4. Verify the content matches what you published
