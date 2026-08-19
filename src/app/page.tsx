@@ -249,7 +249,7 @@ const meta = await processContent(content, publicKey || 'pending');
                 <div className="text-sm text-secondary">
                   {transactionInfo ? (
                     <>
-                      Transaction: {formatBytes(transactionInfo.transactionSize)} / {formatBytes(transactionInfo.maxTransactionSize)} ({transactionInfo.version.toUpperCase()})
+Transaction: {formatBytes(transactionInfo.transactionSize)} / ~1 KB
                       {transactionInfo.availableBytes < 0 && ' - Content too large'}
                     </>
                   ) : (
@@ -333,7 +333,7 @@ const meta = await processContent(content, publicKey || 'pending');
               <div className="flex justify-between">
                 <span className="text-secondary">Transaction Size:</span>
                 <span className="text-accent">
-                  {transactionInfo ? `${formatBytes(transactionInfo.transactionSize)} / ${formatBytes(transactionInfo.maxTransactionSize)} (${transactionInfo.version.toUpperCase()})` : 'Calculating...'}
+{transactionInfo ? `${formatBytes(transactionInfo.transactionSize)} / ~1 KB (${transactionInfo.version.toUpperCase()})` : 'Calculating...'}
                 </span>
               </div>
               

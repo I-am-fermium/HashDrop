@@ -27,9 +27,9 @@ export function WalletConnect({ isConnected, publicKey, onConnect, onDisconnect 
           <div className="text-sm text-secondary">
             Connected as: <span className="font-mono text-xs text-accent">{publicKey.slice(0, 4)}...{publicKey.slice(-4)}</span>
           </div>
-          <button
+<button
             onClick={handleDisconnect}
-            className="bg-red-600 text-white font-bold py-1 px-3 rounded hover:opacity-90 transition text-sm"
+            className="bg-accent text-white font-bold py-1 px-3 rounded hover:opacity-90 transition text-sm"
           >
             Disconnect
           </button>
