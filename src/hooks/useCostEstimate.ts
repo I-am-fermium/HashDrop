@@ -28,6 +28,7 @@ export interface CostEstimate {
 /**
  * Hook for calculating cost estimates
  * Uses network-authoritative pricing from Solana RPC
+ * Note: exceedsMaxSize is now determined by actual transaction serialization
  */
 export function useCostEstimate(content: string) {
   const [estimate, setEstimate] = useState<CostEstimate>({
@@ -45,7 +46,13 @@ export function useCostEstimate(content: string) {
 
   const calculate = useCallback((text: string): CostEstimate => {
     const contentSize = new TextEncoder().encode(text).length;
-    const exceedsMaxSize = contentSize > 1024; // 1KB max for memo
+    
+    // Note: exceedsMaxSize is now determined by actual transaction serialization
+    // in the page.tsx component. We keep this for backward compatibility
+    // but it's no longer used for validation.
+    // V1 transactions support up to 4096 bytes total (including overhead)
+    // Legacy/V0 transactions support up to 1232 bytes total
+    const exceedsMaxSize = false; // Will be determined by actual transaction size
 
     // Protocol fee in lamports - 0.001 SOL
     const protocolFeeLamports = 1000000; // 0.001 SOL = 1,000,000 lamports

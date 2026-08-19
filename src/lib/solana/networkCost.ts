@@ -139,6 +139,7 @@ export async function getLatestBlockhash(
   rpc: Rpc<SolanaRpcApi>
 ): Promise<{ blockhash: string; lastValidBlockHeight: bigint }> {
   try {
+    // Kit's getLatestBlockhash returns a PendingRpcRequest that needs .send()
     const result = await rpc.getLatestBlockhash().send();
     return {
       blockhash: result.value.blockhash,

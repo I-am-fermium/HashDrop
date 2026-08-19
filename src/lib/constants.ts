@@ -16,8 +16,10 @@ export const getEndpoint = (): string => {
   return DEVNET_ENDPOINT;
 };
 
-// Content constraints
-export const MAX_CONTENT_SIZE_FOR_MEMO = 1024; // 1KB max for Memo Drop
+// Content constraints - removed hardcoded 1024-byte limit
+// Transaction size is now dynamically validated based on actual serialized transaction size
+// V1 transactions support up to 4096 bytes
+// Legacy/V0 transactions support up to 1232 bytes
 
 // Protocol configuration
 export const HASHDROP_VERSION = 1;

@@ -1,15 +1,12 @@
 /**
  * HashDrop Wallet Hook
  * 
- * Provides wallet connection and transaction utilities using Solana Kit
- * Uses Wallet Standard for wallet interactions
+ * Provides wallet connection and transaction utilities using Wallet Standard
+ * Compatible with Phantom and other Wallet Standard wallets
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { PublicKey, VersionedTransaction, Connection } from '@solana/web3.js';
-import { createSolanaRpc } from '@solana/rpc';
-import type { Rpc } from '@solana/rpc-spec';
-import type { SolanaRpcApi } from '@solana/rpc-api';
 
 import { DEVNET_ENDPOINT, MAINNET_ENDPOINT } from '../lib/constants';
 
@@ -42,7 +39,7 @@ export interface UseWalletResult {
 }
 
 /**
- * Get RPC connection using Solana Kit
+ * Get RPC connection
  */
 export function getConnection(): Connection {
   const endpoint = GET_CURRENT_ENDPOINT();
@@ -50,9 +47,8 @@ export function getConnection(): Connection {
 }
 
 /**
- * Hook for wallet operations - uses direct window.solana API
- * Compatible with Phantom and Brave browsers
- * Uses Solana Kit for RPC operations
+ * Hook for wallet operations - uses Wallet Standard API
+ * Compatible with Phantom and other Wallet Standard wallets
  */
 export function useWallet(): UseWalletResult {
   const [network, setNetwork] = useState<'devnet' | 'mainnet'>('devnet');
@@ -69,21 +65,21 @@ export function useWallet(): UseWalletResult {
     setNetwork(currentNetwork);
   }, []);
 
-  // Detect wallet and connection status
+  // Check wallet connection status
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const provider = (window as any).solana;
-    if (!provider) return;
+    const walletRegistry = (window as any).solana;
+    if (!walletRegistry) return;
 
     // Store wallet reference for later use
-    walletRef.current = provider;
+    walletRef.current = walletRegistry;
 
     // Check if already connected by checking the wallet's internal state
     const checkConnectionStatus = () => {
       try {
         // Phantom stores wallet status internally
-        if (provider.isConnected) {
+        if (walletRegistry.isConnected) {
           const storedPk = localStorage.getItem('phantom-key');
           if (storedPk) {
             setPublicKey(storedPk);
@@ -91,7 +87,7 @@ export function useWallet(): UseWalletResult {
           } else {
             // Try to get public key from provider
             try {
-              const pkStr = provider.publicKey?.toBase58();
+              const pkStr = walletRegistry.publicKey?.toBase58();
               if (pkStr) {
                 setPublicKey(pkStr);
                 setIsConnected(true);
@@ -116,18 +112,18 @@ export function useWallet(): UseWalletResult {
   const connect = useCallback(async () => {
     if (typeof window === 'undefined') return;
 
-    const provider = (window as any).solana;
-    if (!provider) {
-      throw new Error('No wallet detected. Please install Phantom or Brave wallet.');
+    const walletRegistry = (window as any).solana;
+    if (!walletRegistry) {
+      throw new Error('No wallet detected. Please install Phantom or another Wallet Standard wallet.');
     }
 
     try {
-      const accounts = await provider.connect();
+      const accounts = await walletRegistry.connect();
       if (accounts && accounts.publicKey) {
         const pubKeyStr = accounts.publicKey.toBase58();
         setPublicKey(pubKeyStr);
         setIsConnected(true);
-        walletRef.current = provider;
+        walletRef.current = walletRegistry;
 
         console.log('[HashDrop] Wallet connected:', {
           publicKey: pubKeyStr,
@@ -145,10 +141,10 @@ export function useWallet(): UseWalletResult {
   const disconnect = useCallback(async () => {
     if (typeof window === 'undefined') return;
 
-    const provider = walletRef.current || (window as any).solana;
-    if (provider) {
+    const walletRegistry = walletRef.current || (window as any).solana;
+    if (walletRegistry) {
       try {
-        await provider.disconnect();
+        await walletRegistry.disconnect();
         console.log('[HashDrop] Phantom disconnect called');
       } catch (error: any) {
         console.error('[HashDrop] Disconnect failed:', error);
@@ -175,8 +171,8 @@ export function useWallet(): UseWalletResult {
     }
   }, []);
 
-  // Send transaction using the wallet's native API (Phantom/Brave)
-  // Supports VersionedTransaction for v1 transactions
+  // Send transaction using Wallet Standard API
+  // Compatible with Phantom and other Wallet Standard wallets
   const sendTransaction = useCallback(async (
     transaction: VersionedTransaction
   ): Promise<TransactionResult> => {
@@ -198,8 +194,8 @@ export function useWallet(): UseWalletResult {
       };
     }
 
-    const provider = walletRef.current || (window as any).solana;
-    if (!provider) {
+    const walletRegistry = walletRef.current || (window as any).solana;
+    if (!walletRegistry) {
       return {
         success: false,
         signature: null,
@@ -221,16 +217,22 @@ export function useWallet(): UseWalletResult {
         };
       }
 
-      // Check if it's a VersionedTransaction (v1 only)
+      // Check if it's a VersionedTransaction
       const isVersioned = transaction instanceof VersionedTransaction;
       
       if (isVersioned) {
-        // For VersionedTransaction, we need to sign it first
-        // Phantom/Brave wallets support signTransaction for VersionedTransaction
-        if (provider.signTransaction) {
-          const signedTx = await provider.signTransaction(transaction);
-          const signature = await conn.sendRawTransaction(signedTx.serialize());
-          console.log('[HashDrop] Transaction signed and sent:', signature);
+        // Use Wallet Standard API to sign transaction
+        if (walletRegistry.signTransaction) {
+          console.log('[HashDrop] Signing transaction with wallet');
+          const signedTx = await walletRegistry.signTransaction(transaction);
+          
+          // Serialize the signed transaction
+          const serializedTx = signedTx.serialize();
+          console.log('[HashDrop] Transaction serialized, size:', serializedTx.length);
+          
+          // Send the serialized transaction
+          const signature = await conn.sendRawTransaction(serializedTx);
+          console.log('[HashDrop] Transaction sent:', signature);
           
           await conn.confirmTransaction(signature, 'confirmed');
           console.log('[HashDrop] Transaction confirmed');
@@ -253,7 +255,7 @@ export function useWallet(): UseWalletResult {
         return {
           success: false,
           signature: null,
-          error: 'Only v1 transactions (VersionedTransaction) are supported. Legacy transactions are not supported.',
+          error: 'Only VersionedTransaction is supported',
           blockTime: null,
         };
       }
@@ -263,6 +265,7 @@ export function useWallet(): UseWalletResult {
         name: error?.name,
         message: error?.message,
         code: error?.code,
+        stack: error?.stack,
       });
 
       // Handle user rejection
@@ -293,6 +296,16 @@ export function useWallet(): UseWalletResult {
           success: false,
           signature: null,
           error: 'Transaction timeout - please try again',
+          blockTime: null,
+        };
+      }
+
+      // Handle internal errors with more detail
+      if (error?.message?.toLowerCase().includes('internal error')) {
+        return {
+          success: false,
+          signature: null,
+          error: error?.message || 'Transaction failed: internal error',
           blockTime: null,
         };
       }

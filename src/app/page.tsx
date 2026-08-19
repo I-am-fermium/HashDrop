@@ -7,7 +7,7 @@ import { useWallet, TransactionResult, getConnection } from '../hooks/useWallet'
 import { useCostEstimate } from '../hooks/useCostEstimate';
 import { processContent, ContentMeta } from '../lib/content';
 import { encodeMemoPayload, canFitInMemo, MEMO_PROGRAM_ID, calculateTransactionSize, LEGACY_TRANSACTION_MAX_BYTES, V1_TRANSACTION_MAX_BYTES } from '../lib/memo';
-import { detectTransactionCapabilities } from '../lib/transactions';
+import { detectTransactionCapabilities, buildMemoDropTransaction, serializeTransaction } from '../lib/transactions';
 
 import { WalletConnect } from '../components/WalletConnect';
 import { PublishButton } from '../components/PublishButton';
@@ -28,6 +28,11 @@ export default function Home() {
     maxTransactionSize: number;
     version: string;
     availableBytes: number;
+  } | null>(null);
+  const [capabilities, setCapabilities] = useState<{
+    supportsV1: boolean;
+    maxTransactionBytes: number;
+    preferredVersion: string;
   } | null>(null);
 
   const { isConnected, publicKey, connect, disconnect, sendTransaction, network } = useWallet();
@@ -56,20 +61,33 @@ const meta = await processContent(content, publicKey || 'pending');
     processContentData();
   }, [content, publicKey]);
 
-  // Calculate transaction size info
+  // Calculate transaction size info and capabilities
   useEffect(() => {
-    if (content && publicKey) {
-      const calculateInfo = async () => {
-        const info = calculateTransactionSize(content);
-        setTransactionInfo({
-          transactionSize: info.transactionBytes,
-          maxTransactionSize: info.maxTransactionBytes,
-          version: 'v1',
-          availableBytes: info.availableBytes,
-        });
-      };
-      calculateInfo();
-    }
+    const calculateInfo = async () => {
+      if (content && publicKey) {
+        try {
+          // Get transaction capabilities
+          const caps = await detectTransactionCapabilities(getConnection());
+          setCapabilities({
+            supportsV1: caps.supportsV1,
+            maxTransactionBytes: caps.maxTransactionBytes,
+            preferredVersion: caps.preferredVersion,
+          });
+          
+          // Calculate transaction size
+          const info = calculateTransactionSize(content);
+          setTransactionInfo({
+            transactionSize: info.transactionBytes,
+            maxTransactionSize: info.maxTransactionBytes,
+            version: caps.preferredVersion,
+            availableBytes: info.availableBytes,
+          });
+        } catch (error) {
+          console.error('[HashDrop] Failed to calculate transaction info:', error);
+        }
+      }
+    };
+    calculateInfo();
   }, [content, publicKey]);
 
   // Handle publish - show confirmation dialog
@@ -101,66 +119,31 @@ const meta = await processContent(content, publicKey || 'pending');
       const connection = getConnection();
       
       // Get transaction capabilities
-      const capabilities = await detectTransactionCapabilities(connection);
-      const maxTransactionBytes = capabilities.maxTransactionBytes;
+      const caps = await detectTransactionCapabilities(connection);
+      const maxTransactionBytes = caps.maxTransactionBytes;
       
       // Get latest blockhash
       const { blockhash } = await connection.getLatestBlockhash('confirmed');
 
-      // Encode content as base64 for V2 format
-      const base64Content = btoa(content);
-
-      // Encode memo payload
-      const memoData = encodeMemoPayload(
+      // Build the transaction
+      const transaction = await buildMemoDropTransaction(
+        content,
         contentMeta.hashDropId,
         contentMeta.hash,
         'text/plain',
         contentMeta.size,
-        base64Content
+        publicKey,
+        connection
       );
 
-      // Build transaction using v1 format (VersionedTransaction)
-      const memoProgramId = new PublicKey(MEMO_PROGRAM_ID);
-      const memoInstruction = new TransactionInstruction({
-        programId: memoProgramId,
-        data: Buffer.from(memoData, 'utf-8'),
-        keys: [],
-      });
-
-      // Create TransactionMessage and compile to v1 using Kit
-      const { TransactionMessage } = require('@solana/web3.js');
-      const { compileTransactionMessage } = require('@solana/transaction-messages');
-      const { setTransactionMessageFeePayer, setTransactionMessageLifetimeUsingBlockhash, appendTransactionMessageInstruction } = require('@solana/transaction-messages');
-      
-      const transactionMessage = new TransactionMessage({
-        payerKey: new PublicKey(publicKey),
-        recentBlockhash: blockhash,
-        instructions: [memoInstruction],
-      });
-
-      // Build v1 message using Kit's API
-      let v1Message = {
-        version: 1,
-        instructions: [],
-      } as any;
-      
-      v1Message = setTransactionMessageFeePayer(new PublicKey(publicKey), v1Message);
-      v1Message = setTransactionMessageLifetimeUsingBlockhash({ blockhash, lastValidBlockHeight: BigInt(0) }, v1Message);
-      v1Message = appendTransactionMessageInstruction(memoInstruction, v1Message);
-      
-      const compiledMessage = compileTransactionMessage(v1Message);
-      const transaction = new VersionedTransaction(compiledMessage);
-
       // Serialize and check actual size
-      const serialized = transaction.serialize();
+      const serialized = serializeTransaction(transaction);
       const transactionSize = serialized.length;
 
       console.log('[HashDrop] Memo instruction built', {
-        data: memoData,
-        size: Buffer.from(memoData).length,
-        transactionSize,
+        size: transactionSize,
         maxTransactionBytes,
-        version: capabilities.preferredVersion,
+        version: caps.preferredVersion,
       });
 
       // Validate transaction size
@@ -168,7 +151,7 @@ const meta = await processContent(content, publicKey || 'pending');
         setLastResult({
           success: false,
           signature: null,
-          error: `Transaction size (${transactionSize} bytes) exceeds maximum (${maxTransactionBytes} bytes) for ${capabilities.preferredVersion} transactions.`,
+          error: `Transaction size (${transactionSize} bytes) exceeds maximum (${maxTransactionBytes} bytes) for ${caps.preferredVersion} transactions.`,
           blockTime: null,
         });
         return;
@@ -308,20 +291,20 @@ const meta = await processContent(content, publicKey || 'pending');
           <h2 className="text-lg font-semibold mb-3 text-primary">
             Result {lastResult.success ? 'OK' : 'FAILED'}
           </h2>
-            <div className="text-sm">
-              {lastResult.success ? (
-                <div>
-                  <div className="text-green-400 mb-2">Transaction successful!</div>
-                  <div className="font-mono text-xs break-all">
-                    {lastResult.signature}
-                  </div>
+          <div className="text-sm">
+            {lastResult.success ? (
+              <div>
+                <div className="text-green-400 mb-2">Transaction successful!</div>
+                <div className="font-mono text-xs break-all">
+                  {lastResult.signature}
                 </div>
-              ) : (
-                <div className="text-red-400">
-                  Error: {lastResult.error}
-                </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="text-red-400">
+                Error: {lastResult.error}
+              </div>
+            )}
+          </div>
         </section>
       )}
 
