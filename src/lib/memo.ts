@@ -5,6 +5,8 @@
  * This is now the ONLY publication method for HashDrop.
  */
 
+import { utf8ToBase64 } from './encoding';
+
 // Canonical SPL Memo program ID
 export const MEMO_PROGRAM_ID = 'Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH';
 
@@ -91,15 +93,10 @@ export function getMemoProgramId(): string {
 
 /**
  * Encode string to base64 (handles unicode properly)
+ * Uses the centralized UTF-8-safe encoding utility
  */
-function encodeBase64(str: string): string {
-  // Use TextEncoder to properly handle unicode
-  const bytes = new TextEncoder().encode(str);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
+export function encodeBase64(str: string): string {
+  return utf8ToBase64(str);
 }
 
 /**

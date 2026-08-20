@@ -11,6 +11,7 @@
 
 import { PublicKey, VersionedTransaction, TransactionMessage, TransactionInstruction, Connection } from '@solana/web3.js';
 import { encodeMemoPayload, MEMO_PROGRAM_ID } from './memo';
+import { utf8ToBase64 } from './encoding';
 import {
   detectTransactionCapabilities as _detectTransactionCapabilities,
   SolanaTransactionCapabilities,
@@ -52,8 +53,8 @@ export async function buildMemoDropTransaction(
     lastValidBlockHeight = BigInt(blockhashResult.lastValidBlockHeight);
   }
   
-  // Encode content as base64 for V2 format
-  const base64Content = btoa(content);
+  // Encode content as base64 for V2 format (UTF-8 safe)
+  const base64Content = utf8ToBase64(content);
   
   // Encode memo payload
   const memoPayload = encodeMemoPayload(

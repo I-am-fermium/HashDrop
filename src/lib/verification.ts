@@ -10,6 +10,7 @@ import { Connection, PublicKey, Transaction, VersionedTransaction } from '@solan
 import * as bs58 from 'bs58';
 import { calculateHash, stringToBytes } from './content';
 import { decodeMemoPayload, isValidMemoPayload, MEMO_PROGRAM_ID, MEMO_VERSION } from './memo';
+import { base64ToUtf8, utf8ToBytes } from './encoding';
 
 // Handle bs58 v6+ API change - decode is now on default export
 const bs58Decode = (bs58 as any).default?.decode || (bs58 as any).decode;
@@ -33,15 +34,13 @@ export interface MemoVerificationResult {
 }
 
 /**
- * Decode Base64 content (browser-compatible)
+ * Decode Base64 content to Uint8Array (browser-compatible)
+ * Uses the centralized encoding utility for consistency
  */
 function decodeBase64(base64: string): Uint8Array {
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
+  // Decode Base64 to string, then encode to bytes
+  const decoded = base64ToUtf8(base64);
+  return utf8ToBytes(decoded);
 }
 
 /**
