@@ -18,6 +18,7 @@ import {
   TransactionVersionType,
   V1_TRANSACTION_MAX_BYTES,
 } from './solana/transactionCapabilities';
+import { getRpcUrl, getCurrentNetwork, Network } from './network';
 
 // Re-export for use by other modules
 export { _detectTransactionCapabilities as detectTransactionCapabilities };
@@ -198,7 +199,7 @@ export async function buildAndValidateTransaction(
   version: TransactionVersionType;
   capabilities: SolanaTransactionCapabilities;
 }> {
-  const conn = connection || new Connection('https://api.devnet.solana.com', 'confirmed');
+  const conn = connection || new Connection(getRpcUrl(), 'confirmed');
   
   const transaction = await buildMemoDropTransaction(
     content,
@@ -222,7 +223,7 @@ export async function buildAndValidateTransaction(
       supportsV0: false,
       maxTransactionBytes: V1_TRANSACTION_MAX_BYTES,
       preferredVersion: 'v1',
-      network: 'devnet',
+      network: getCurrentNetwork(),
     },
   };
 }

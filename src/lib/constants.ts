@@ -3,17 +3,36 @@
  * Configuration for Solana program and network settings
  */
 
-// Network configuration
-export const DEVNET_ENDPOINT = 'https://api.devnet.solana.com';
-export const MAINNET_ENDPOINT = 'https://api.mainnet-beta.solana.com';
+// Re-export network configuration from centralized source
+export { 
+  DEVNET_RPC as DEVNET_ENDPOINT, 
+  MAINNET_RPC as MAINNET_ENDPOINT,
+  getCurrentNetwork as getNetwork,
+  NETWORK_CONFIGS,
+  getNetworkConfig,
+  getRpcUrl,
+  getExplorerUrl,
+  isMainnet,
+  isDevnet,
+  getNetworkLabel,
+  getNetworkDisplay,
+} from './network';
+
+// Re-export types
+export type { Network, NetworkConfig } from './network';
+
+// Default network endpoint (for backward compatibility)
+export const DEFAULT_DEVNET_ENDPOINT = 'https://api.devnet.solana.com';
+export const DEFAULT_MAINNET_ENDPOINT = 'https://api.mainnet-beta.solana.com';
 
 // Get current endpoint from URL parameter or default to devnet
+// DEPRECATED: Use getRpcUrl() from network.ts instead
 export const getEndpoint = (): string => {
   if (typeof window !== 'undefined') {
     const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('network') === 'mainnet' ? MAINNET_ENDPOINT : DEVNET_ENDPOINT;
+    return urlParams.get('network') === 'mainnet' ? DEFAULT_MAINNET_ENDPOINT : DEFAULT_DEVNET_ENDPOINT;
   }
-  return DEVNET_ENDPOINT;
+  return DEFAULT_DEVNET_ENDPOINT;
 };
 
 // Content constraints - removed hardcoded 1024-byte limit

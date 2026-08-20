@@ -11,6 +11,7 @@ import * as bs58 from 'bs58';
 import { calculateHash, stringToBytes } from './content';
 import { decodeMemoPayload, isValidMemoPayload, MEMO_PROGRAM_ID, MEMO_VERSION } from './memo';
 import { base64ToUtf8, utf8ToBytes } from './encoding';
+import { getNetworkDisplay, getCurrentNetwork } from './network';
 
 // Handle bs58 v6+ API change - decode is now on default export
 const bs58Decode = (bs58 as any).default?.decode || (bs58 as any).decode;
@@ -54,7 +55,7 @@ function decodeInstructionData(data: any): string {
     return '';
   }
   
-// If already a string, it's likely Base58 encoded - decode it
+  // If already a string, it's likely Base58 encoded - decode it
   if (typeof data === 'string') {
     try {
       // Try Base58 decode first
@@ -187,6 +188,7 @@ export async function verifyMemoDrop(
     });
     
     if (!tx) {
+      const networkDisplay = getNetworkDisplay();
       return {
         verified: false,
         content: '',
@@ -196,7 +198,7 @@ export async function verifyMemoDrop(
         contentType: '',
         contentSize: 0,
         signature,
-        error: 'Transaction not found on Solana Devnet.',
+        error: `Transaction not found on Solana ${networkDisplay}.`,
       };
     }
     

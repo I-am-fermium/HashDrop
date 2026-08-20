@@ -8,16 +8,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { PublicKey, VersionedTransaction, Connection } from '@solana/web3.js';
 
-import { DEVNET_ENDPOINT, MAINNET_ENDPOINT } from '../lib/constants';
-
-// Network configuration
-export const GET_CURRENT_ENDPOINT = (): string => {
-  if (typeof window !== 'undefined') {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('network') === 'mainnet' ? MAINNET_ENDPOINT : DEVNET_ENDPOINT;
-  }
-  return DEVNET_ENDPOINT;
-};
+import { getRpcUrl, getCurrentNetwork, setCurrentNetwork, Network, getNetworkConfig } from '../lib/network';
 
 // Transaction result
 export interface TransactionResult {
@@ -30,19 +21,20 @@ export interface TransactionResult {
 export interface UseWalletResult {
   publicKey: string | null;
   isConnected: boolean;
-  network: 'devnet' | 'mainnet';
+  network: Network;
   connection: Connection | null;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
   sendTransaction: (transaction: VersionedTransaction) => Promise<TransactionResult>;
   wallet: any;
+  setNetwork: (network: Network) => void;
 }
 
 /**
- * Get RPC connection
+ * Get RPC connection for the current network
  */
 export function getConnection(): Connection {
-  const endpoint = GET_CURRENT_ENDPOINT();
+  const endpoint = getRpcUrl();
   return new Connection(endpoint, 'confirmed');
 }
 
@@ -51,7 +43,7 @@ export function getConnection(): Connection {
  * Compatible with Phantom and other Wallet Standard wallets
  */
 export function useWallet(): UseWalletResult {
-  const [network, setNetwork] = useState<'devnet' | 'mainnet'>('devnet');
+  const [network, setNetworkState] = useState<Network>(getCurrentNetwork());
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [connection, setConnection] = useState<Connection | null>(null);
@@ -61,9 +53,15 @@ export function useWallet(): UseWalletResult {
   useEffect(() => {
     const conn = getConnection();
     setConnection(conn);
-    const currentNetwork = GET_CURRENT_ENDPOINT().includes('devnet') ? 'devnet' : 'mainnet';
-    setNetwork(currentNetwork);
+    const currentNetwork = getCurrentNetwork();
+    setNetworkState(currentNetwork);
   }, []);
+
+  // Handle network changes - update connection when network changes
+  useEffect(() => {
+    const conn = getConnection();
+    setConnection(conn);
+  }, [network]);
 
   // Check wallet connection status
   useEffect(() => {
@@ -170,6 +168,23 @@ export function useWallet(): UseWalletResult {
       walletRef.current = null;
     }
   }, []);
+
+  // Set network (with wallet reconnection if needed)
+  const setNetwork = useCallback((newNetwork: Network) => {
+    // Always update state and localStorage
+    console.log('[HashDrop] Network changing:', network, '->', newNetwork);
+    
+    // Disconnect current wallet if connected
+    if (isConnected) {
+      disconnect();
+    }
+    
+    // Update localStorage first
+    setCurrentNetwork(newNetwork);
+    
+    // Update React state
+    setNetworkState(newNetwork);
+  }, [isConnected, disconnect, network]);
 
   // Send transaction using Wallet Standard API
   // Compatible with Phantom and other Wallet Standard wallets
@@ -328,6 +343,7 @@ export function useWallet(): UseWalletResult {
     disconnect,
     sendTransaction,
     wallet: walletRef.current,
+    setNetwork,
   };
 }
 

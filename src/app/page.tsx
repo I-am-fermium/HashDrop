@@ -8,11 +8,13 @@ import { useCostEstimate } from '../hooks/useCostEstimate';
 import { processContent, ContentMeta } from '../lib/content';
 import { encodeMemoPayload, canFitInMemo, MEMO_PROGRAM_ID, calculateTransactionSize, LEGACY_TRANSACTION_MAX_BYTES, V1_TRANSACTION_MAX_BYTES } from '../lib/memo';
 import { detectTransactionCapabilities, buildMemoDropTransaction, serializeTransaction } from '../lib/transactions';
+import { Network, getNetworkDisplay } from '../lib/network';
 
 import { WalletConnect } from '../components/WalletConnect';
 import { PublishButton } from '../components/PublishButton';
 import { CostSummary } from '../components/CostSummary';
 import { ContentEditor } from '../components/ContentEditor';
+import { NetworkSelector } from '../components/NetworkSelector';
 
 // Default network fee for memo drop (5000 lamports)
 const DEFAULT_NETWORK_FEE_SOL = 0.000005;
@@ -35,7 +37,7 @@ export default function Home() {
     preferredVersion: string;
   } | null>(null);
 
-  const { isConnected, publicKey, connect, disconnect, sendTransaction, network } = useWallet();
+  const { isConnected, publicKey, connect, disconnect, sendTransaction, network, setNetwork } = useWallet();
   const { estimate, calculate } = useCostEstimate(content);
 
   // Process content when it changes
@@ -43,7 +45,7 @@ export default function Home() {
     const processContentData = async () => {
       if (content && content.length > 0) {
         try {
-const meta = await processContent(content, publicKey || 'pending');
+          const meta = await processContent(content, publicKey || 'pending');
           setContentMeta(meta);
 
           console.log('[HashDrop] Content processed:', {
@@ -217,6 +219,25 @@ const meta = await processContent(content, publicKey || 'pending');
         </p>
       </div>
 
+      {/* Network Selector */}
+      <section className="bg-gray-900 rounded-lg p-4 mb-6 border border-gray-700">
+        <h2 className="text-lg font-semibold mb-3 text-primary">Network</h2>
+        <div className="flex items-center gap-4">
+          <NetworkSelector 
+            currentNetwork={network} 
+            onNetworkChange={setNetwork} 
+          />
+          {network === 'mainnet' && (
+            <div className="text-xs text-yellow-400 bg-yellow-900/30 px-2 py-1 rounded border border-yellow-600">
+              Mainnet uses real SOL. Transactions are permanent.
+            </div>
+          )}
+        </div>
+        <div className="text-xs text-secondary mt-2">
+          Network: {getNetworkDisplay()}
+        </div>
+      </section>
+
       {/* Content Input Section */}
       <section className="bg-gray-900 rounded-lg p-4 mb-6 border border-gray-700">
         <h2 className="text-lg font-semibold mb-3 text-primary">Content</h2>
@@ -249,7 +270,7 @@ const meta = await processContent(content, publicKey || 'pending');
                 <div className="text-sm text-secondary">
                   {transactionInfo ? (
                     <>
-Transaction: {formatBytes(transactionInfo.transactionSize)} / ~1 KB
+ Transaction: {formatBytes(transactionInfo.transactionSize)} / ~1 KB
                       {transactionInfo.availableBytes < 0 && ' - Content too large'}
                     </>
                   ) : (
@@ -333,7 +354,7 @@ Transaction: {formatBytes(transactionInfo.transactionSize)} / ~1 KB
               <div className="flex justify-between">
                 <span className="text-secondary">Transaction Size:</span>
                 <span className="text-accent">
-{transactionInfo ? `${formatBytes(transactionInfo.transactionSize)} / ~1 KB (${transactionInfo.version.toUpperCase()})` : 'Calculating...'}
+ {transactionInfo ? `${formatBytes(transactionInfo.transactionSize)} / ~1 KB (${transactionInfo.version.toUpperCase()})` : 'Calculating...'}
                 </span>
               </div>
               
@@ -343,6 +364,14 @@ Transaction: {formatBytes(transactionInfo.transactionSize)} / ~1 KB
                   {contentMeta?.hashDropId?.slice(0, 16)}...
                 </span>
               </div>
+              
+              {network === 'mainnet' && (
+                <div className="bg-yellow-900/30 border border-yellow-600 rounded p-3">
+                  <p className="text-sm text-yellow-300">
+                    <strong>Mainnet Warning:</strong> This will send real SOL from your wallet. Transactions are permanent.
+                  </p>
+                </div>
+              )}
             </div>
             
             <div className="bg-yellow-900/30 border border-yellow-600 rounded p-3 mb-4">

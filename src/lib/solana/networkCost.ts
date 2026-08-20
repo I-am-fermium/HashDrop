@@ -10,29 +10,25 @@ import type { Rpc } from '@solana/rpc-spec';
 import type { SolanaRpcApi } from '@solana/rpc-api';
 import type { Address } from '@solana/addresses';
 import { Connection } from '@solana/web3.js';
-import { DEVNET_ENDPOINT, MAINNET_ENDPOINT } from '../constants';
+import { getRpcUrl, getCurrentNetwork, Network } from '../network';
 
 // Create RPC instances for different networks
-export const devnetRpc = createSolanaRpc(DEVNET_ENDPOINT);
-export const mainnetRpc = createSolanaRpc(MAINNET_ENDPOINT);
+export const devnetRpc = createSolanaRpc('https://api.devnet.solana.com');
+export const mainnetRpc = createSolanaRpc('https://api.mainnet-beta.solana.com');
 
 /**
  * Get the current RPC based on the network
  */
 export function getRpc(): Rpc<SolanaRpcApi> {
-  const endpoint = GET_CURRENT_ENDPOINT();
+  const endpoint = getRpcUrl();
   return createSolanaRpc(endpoint);
 }
 
 /**
- * Get the current endpoint
+ * Get the current network
  */
-function GET_CURRENT_ENDPOINT(): string {
-  if (typeof window !== 'undefined') {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('network') === 'mainnet' ? MAINNET_ENDPOINT : DEVNET_ENDPOINT;
-  }
-  return DEVNET_ENDPOINT;
+export function getCurrentSolanaNetwork(): Network {
+  return getCurrentNetwork();
 }
 
 /**
@@ -40,7 +36,7 @@ function GET_CURRENT_ENDPOINT(): string {
  * @deprecated Use getRpc() instead for Kit-based operations
  */
 export function getConnection(): Connection {
-  const endpoint = GET_CURRENT_ENDPOINT();
+  const endpoint = getRpcUrl();
   return new Connection(endpoint, 'confirmed');
 }
 

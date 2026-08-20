@@ -5,15 +5,15 @@
  * This is the SINGLE source of truth for transaction version selection.
  * 
  * v1 Support:
- * - Uses Solana Kit's transaction-messages package for v1 support
+ * - Uses Solana web3.js with compileToV1Message support OR Solana Kit
  * - Checks for compileTransactionMessage with version 1 support
  * - No fake flags or hardcoded values
  * - Future-proof: automatically detects when SDK adds v1 support
  */
 
 import { Connection, TransactionMessage, TransactionInstruction, PublicKey, VersionedTransaction } from '@solana/web3.js';
-import { DEVNET_ENDPOINT } from '../constants';
 import { MEMO_PROGRAM_ID } from '../memo';
+import { getCurrentNetwork, Network } from '../network';
 
 // Transaction size limits
 export const LEGACY_TRANSACTION_MAX_BYTES = 1232;
@@ -27,7 +27,7 @@ export interface SolanaTransactionCapabilities {
   supportsV0: boolean;
   maxTransactionBytes: number;
   preferredVersion: TransactionVersionType;
-  network: 'devnet' | 'mainnet';
+  network: Network;
 }
 
 /**
@@ -90,11 +90,13 @@ function sdkSupportsV1(): boolean {
 export async function detectTransactionCapabilities(
   connection?: Connection
 ): Promise<SolanaTransactionCapabilities> {
-  const conn = connection || new Connection(DEVNET_ENDPOINT, 'confirmed');
+  const conn = connection || new Connection(getCurrentNetwork() === 'mainnet' 
+    ? 'https://api.mainnet-beta.solana.com' 
+    : 'https://api.devnet.solana.com', 
+    'confirmed');
   
-  // Determine network
-  const isDevnet = DEVNET_ENDPOINT.includes('devnet');
-  const network: 'devnet' | 'mainnet' = isDevnet ? 'devnet' : 'mainnet';
+  // Determine network from connection or use current network
+  const network: Network = getCurrentNetwork();
   
   // Check if SDK supports v1 by checking for compileToV1Message or Kit's compileTransactionMessage
   const supportsV1 = sdkSupportsV1();
@@ -134,7 +136,7 @@ export function getDefaultCapabilities(): SolanaTransactionCapabilities {
     supportsV0,
     maxTransactionBytes,
     preferredVersion,
-    network: 'devnet',
+    network: getCurrentNetwork(),
   };
 }
 

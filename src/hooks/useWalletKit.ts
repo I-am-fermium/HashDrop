@@ -9,19 +9,15 @@
  * - Uses legacy web3.js Connection/transaction for wallet signing (Phantom compatibility)
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Connection, PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js';
 
-import { DEVNET_ENDPOINT, MAINNET_ENDPOINT } from '../lib/constants';
+import { getRpcUrl, getCurrentNetwork, setCurrentNetwork, Network, getNetworkConfig } from '../lib/network';
 import { getConnection } from '../lib/solana/networkCost';
 
 // Network configuration
 export const GET_CURRENT_ENDPOINT = (): string => {
-  if (typeof window !== 'undefined') {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('network') === 'mainnet' ? MAINNET_ENDPOINT : DEVNET_ENDPOINT;
-  }
-  return DEVNET_ENDPOINT;
+  return getRpcUrl();
 };
 
 // Transaction result
@@ -35,12 +31,13 @@ export interface TransactionResult {
 export interface UseWalletResult {
   publicKey: string | null;
   isConnected: boolean;
-  network: 'devnet' | 'mainnet';
+  network: Network;
   connection: Connection | null;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
   sendTransaction: (transaction: Transaction | VersionedTransaction) => Promise<TransactionResult>;
   wallet: any;
+  setNetwork: (network: Network) => void;
 }
 
 /**
@@ -48,18 +45,19 @@ export interface UseWalletResult {
  * Compatible with Phantom and other Wallet Standard wallets
  */
 export function useWalletKit(): UseWalletResult {
-  const [network, setNetwork] = useState<'devnet' | 'mainnet'>('devnet');
+  const [network, setNetworkState] = useState<Network>(getCurrentNetwork());
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [connection, setConnection] = useState<Connection | null>(null);
   const [wallet, setWallet] = useState<any>(null);
+  const walletRef = useRef<any>(null);
 
   // Initialize connection and network
   useEffect(() => {
-    const conn = new Connection(GET_CURRENT_ENDPOINT(), 'confirmed');
+    const conn = new Connection(getRpcUrl(), 'confirmed');
     setConnection(conn);
-    const currentNetwork = GET_CURRENT_ENDPOINT().includes('devnet') ? 'devnet' : 'mainnet';
-    setNetwork(currentNetwork);
+    const currentNetwork = getCurrentNetwork();
+    setNetworkState(currentNetwork);
   }, []);
 
   // Check wallet connection status
@@ -114,6 +112,7 @@ export function useWalletKit(): UseWalletResult {
         setPublicKey(pubKeyStr);
         setIsConnected(true);
         setWallet(walletRegistry);
+        walletRef.current = walletRegistry;
 
         console.log('[HashDrop] Wallet connected:', {
           publicKey: pubKeyStr,
@@ -131,7 +130,7 @@ export function useWalletKit(): UseWalletResult {
   const disconnect = useCallback(async () => {
     if (typeof window === 'undefined') return;
 
-    const walletRegistry = wallet || (window as any).solana;
+    const walletRegistry = walletRef.current || (window as any).solana;
     if (walletRegistry) {
       try {
         await walletRegistry.disconnect();
@@ -142,6 +141,7 @@ export function useWalletKit(): UseWalletResult {
         setPublicKey(null);
         setIsConnected(false);
         setWallet(null);
+        walletRef.current = null;
         
         // Clear localStorage key if present
         try {
@@ -156,8 +156,33 @@ export function useWalletKit(): UseWalletResult {
       setPublicKey(null);
       setIsConnected(false);
       setWallet(null);
+      walletRef.current = null;
     }
-  }, [wallet]);
+  }, []);
+
+  // Set network (with wallet reconnection if needed)
+  const setNetwork = useCallback((newNetwork: Network) => {
+    const currentNetwork = getCurrentNetwork();
+    
+    if (currentNetwork !== newNetwork) {
+      // Network is changing
+      console.log('[HashDrop] Network changing:', currentNetwork, '->', newNetwork);
+      
+      // Disconnect current wallet if connected
+      if (isConnected) {
+        disconnect();
+      }
+      
+      // Update network state
+      setCurrentNetwork(newNetwork);
+      setNetworkState(newNetwork);
+      
+      // Reconnect wallet if it was connected
+      if (walletRef.current) {
+        // Wallet will reconnect on next connect call
+      }
+    }
+  }, [isConnected, disconnect]);
 
   // Send transaction using the wallet's native API
   const sendTransaction = useCallback(async (
@@ -181,7 +206,7 @@ export function useWalletKit(): UseWalletResult {
       };
     }
 
-    const walletRegistry = wallet || (window as any).solana;
+    const walletRegistry = walletRef.current || (window as any).solana;
     if (!walletRegistry) {
       return {
         success: false,
@@ -192,7 +217,7 @@ export function useWalletKit(): UseWalletResult {
     }
 
     try {
-      const conn = connection || new Connection(GET_CURRENT_ENDPOINT(), 'confirmed');
+      const conn = connection || new Connection(getRpcUrl(), 'confirmed');
 
       // Validate transaction
       if (!transaction) {
@@ -271,7 +296,7 @@ export function useWalletKit(): UseWalletResult {
         blockTime: null,
       };
     }
-  }, [isConnected, publicKey, connection, wallet]);
+  }, [isConnected, publicKey, connection, wallet, network]);
 
   return {
     publicKey,
@@ -282,6 +307,7 @@ export function useWalletKit(): UseWalletResult {
     disconnect,
     sendTransaction,
     wallet,
+    setNetwork,
   };
 }
 
