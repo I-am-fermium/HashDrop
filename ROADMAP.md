@@ -1,6 +1,6 @@
 # Roadmap
 
-## Current Status: Phase 5 Complete - Memo Drop Ready
+## Current Status: Phase 6 Complete - RPC Migration Finished
 
 ## Phase 0 — Specification ✅ COMPLETE
 
@@ -49,14 +49,24 @@
 - [x] Client tests
 - [x] End-to-end devnet testing (pending human approval)
 
-## Phase 6 — Devnet Deployment ⏳ IN PROGRESS
+## Phase 6 — RPC Migration ✅ COMPLETE
+
+- [x] Solana Kit as primary RPC layer
+- [x] RPC factory pattern with `createRpc()` and `createConnection()`
+- [x] Network-specific RPC configuration
+- [x] Updated `transactions.ts` to use Solana Kit RPC
+- [x] Updated `page.tsx` to use Solana Kit RPC
+- [x] Fixed hydration mismatch in network state
+- [x] Fixed Mainnet RPC 403 error
+
+## Phase 7 — Devnet Deployment ⏳ IN PROGRESS
 
 - [ ] Install Solana CLI
 - [ ] Build and deploy Solana program
 - [ ] Update PROGRAM_ID in constants.ts
 - [ ] Test end-to-end publishing with Phantom wallet
 
-## Phase 7 — Mainnet Readiness (Pending)
+## Phase 8 — Mainnet Readiness (Pending)
 
 - [ ] Program review
 - [ ] Authority review
@@ -65,7 +75,7 @@
 - [ ] Upgradeability/immutability review
 - [ ] Rollback/incident plan
 
-## Phase 8 — Launch (Future)
+## Phase 9 — Launch (Future)
 
 - [ ] Public beta
 - [ ] Usage limits
@@ -73,7 +83,7 @@
 - [ ] Protocol transparency
 - [ ] Community feedback
 
-## Phase 9 — Future Enhancements
+## Phase 10 — Future Enhancements
 
 - [ ] Indexer/cache
 - [ ] Search
@@ -101,3 +111,26 @@
 2. Update transaction builder to use `compileToV1Message()`
 3. Test on Devnet with actual v1 transactions
 4. Update UI to display v1 transaction info
+
+---
+
+## RPC Architecture
+
+The application uses a hybrid Solana architecture:
+
+- **@solana/kit** = PRIMARY RPC layer for all RPC operations
+- **@solana/web3.js** = ONLY for Phantom compatibility/signing boundary
+
+**Network Configuration:**
+- Devnet: Uses default Solana Devnet RPC (`https://api.devnet.solana.com`)
+- Mainnet: Requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC` environment variable
+
+---
+
+## Transaction Version Support
+
+| Version | Max Size | Effective Content | Wallet Support |
+|---------|----------|-------------------|----------------|
+| legacy  | 1232 B   | ~800 B (base64)   | ✅ Working |
+| v0      | 1232 B   | ~800 B (base64)   | ✅ Phantom |
+| v1      | 4096 B   | ~2800 B (base64)  | ⚠️ Pending |

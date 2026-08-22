@@ -44,6 +44,25 @@ Users can publish small text and source-code assets without creating an account,
   - `verification.ts` - On-chain verification logic
   - `constants.ts` - Program IDs, network endpoints, sizes
   - `solana/networkCost.ts` - Network-authoritative cost calculation via RPC
+  - `network.ts` - Network configuration and RPC factory
+  - `rpc/devnet.ts` - Devnet RPC configuration
+  - `rpc/mainnet.ts` - Mainnet RPC configuration
+
+### RPC Architecture
+
+The application uses a hybrid Solana architecture:
+
+- **@solana/kit** = PRIMARY RPC layer for all RPC operations (getLatestBlockhash, etc.)
+- **@solana/web3.js** = ONLY for Phantom compatibility/signing boundary
+
+**Network Configuration:**
+- Devnet: Uses default Solana Devnet RPC (`https://api.devnet.solana.com`)
+- Mainnet: Requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC` environment variable (e.g., Helius, QuickNode, Alchemy)
+
+**RPC Factory Pattern:**
+- `createRpc()` - Returns the appropriate Solana Kit RPC client for the current network
+- `createConnection()` - Returns the appropriate web3.js Connection for Phantom compatibility
+- Network selection is centralized in `src/lib/network.ts`
 
 ### Transaction Format
 
@@ -83,6 +102,20 @@ npm test
 npm run dev
 ```
 
+### Environment Configuration
+
+For Mainnet deployment, create a `.env.local` file:
+
+```bash
+# Mainnet RPC URL (REQUIRED for Mainnet)
+NEXT_PUBLIC_SOLANA_MAINNET_RPC=https://mainnet.helius-rpc.com/?api-key=YOUR_API_KEY
+
+# Devnet RPC URL (optional, defaults to Solana Devnet)
+NEXT_PUBLIC_SOLANA_DEVNET_RPC=https://api.devnet.solana.com
+```
+
+**Important:** The application will NOT fall back to the public Solana Mainnet RPC if `NEXT_PUBLIC_SOLANA_MAINNET_RPC` is not configured. You must provide a valid RPC endpoint.
+
 ### Project Structure
 
 ```
@@ -101,6 +134,10 @@ HashDrop/
 │   │   ├── content.ts    # Content engine
 │   │   ├── memo.ts       # Memo Drop utilities
 │   │   ├── transactions.ts # Transaction builders
+│   │   ├── network.ts    # Network configuration
+│   │   ├── rpc/          # RPC configuration
+│   │   │   ├── devnet.ts # Devnet RPC
+│   │   │   └── mainnet.ts # Mainnet RPC
 │   │   └── verification.ts # Verification utilities
 │   └── styles/      # Tailwind CSS
 └── docs/            # Documentation
@@ -132,6 +169,7 @@ npm run test:coverage
 ✅ Memo Drop feature complete
 ✅ Wallet integration working
 ✅ v1 SDK support available
+✅ Solana Kit RPC migration complete
 ⚠️ v1 wallet support pending (Phantom)
 ⏳ Devnet deployment pending human approval
 

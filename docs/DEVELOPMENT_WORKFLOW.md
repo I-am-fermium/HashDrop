@@ -28,9 +28,9 @@ Any protocol, security, fee, or production-deployment change requires explicit h
 
 ## Current Phase
 
-**Phase 5 - Testing & Verification Complete**
+**Phase 6 - RPC Migration Complete**
 
-Next: Devnet deployment (human required)
+Next: Devnet deployment (human required), Mainnet testing (requires RPC URL)
 
 ## Testing Workflow
 
@@ -49,3 +49,28 @@ After completing a phase:
 4. Update TECH_STACK.md if dependencies changed
 5. Update SESSION.md with current state
 6. Update TASK_PROGRESS.md with completed tasks
+
+## RPC Architecture
+
+The application uses a hybrid Solana architecture:
+
+- **@solana/kit** = PRIMARY RPC layer for all RPC operations
+- **@solana/web3.js** = ONLY for Phantom compatibility/signing boundary
+
+**Network Configuration:**
+- Devnet: Uses default Solana Devnet RPC (`https://api.devnet.solana.com`)
+- Mainnet: Requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC` environment variable
+
+## Environment Configuration
+
+For Mainnet deployment, create a `.env.local` file:
+
+```bash
+# Mainnet RPC URL (REQUIRED for Mainnet)
+NEXT_PUBLIC_SOLANA_MAINNET_RPC=https://mainnet.helius-rpc.com/?api-key=YOUR_API_KEY
+
+# Devnet RPC URL (optional, defaults to Solana Devnet)
+NEXT_PUBLIC_SOLANA_DEVNET_RPC=https://api.devnet.solana.com
+```
+
+**Important:** The application will NOT fall back to the public Solana Mainnet RPC if `NEXT_PUBLIC_SOLANA_MAINNET_RPC` is not configured. You must provide a valid RPC endpoint.

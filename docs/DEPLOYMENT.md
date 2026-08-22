@@ -73,20 +73,35 @@ Requires:
 
 ## Environment Variables
 
-### Required
+### Required for Mainnet
 
-- `NEXT_PUBLIC_RPC_URL`: Solana RPC endpoint
+Create a `.env.local` file in the project root:
+
+```bash
+# Mainnet RPC URL (REQUIRED for Mainnet)
+NEXT_PUBLIC_SOLANA_MAINNET_RPC=https://mainnet.helius-rpc.com/?api-key=YOUR_API_KEY
+
+# Devnet RPC URL (optional, defaults to Solana Devnet)
+NEXT_PUBLIC_SOLANA_DEVNET_RPC=https://api.devnet.solana.com
+```
+
+**Important:** The application will NOT fall back to the public Solana Mainnet RPC if `NEXT_PUBLIC_SOLANA_MAINNET_RPC` is not configured. You must provide a valid RPC endpoint.
 
 ### Optional
 
 - `NEXT_PUBLIC_PROGRAM_ID`: HashDrop program ID
 
-## Configuration
+## RPC Architecture
+
+The application uses a hybrid Solana architecture:
+
+- **@solana/kit** = PRIMARY RPC layer for all RPC operations
+- **@solana/web3.js** = ONLY for Phantom compatibility/signing boundary
 
 ### Network Endpoints
 
-- Devnet: `https://api.devnet.solana.com`
-- Mainnet: `https://api.mainnet-beta.solana.com`
+- Devnet: `https://api.devnet.solana.com` (default)
+- Mainnet: `NEXT_PUBLIC_SOLANA_MAINNET_RPC` (required)
 
 ### Program IDs
 
@@ -109,3 +124,10 @@ In case of issues:
 3. Notify users
 4. Deploy fix if needed
 5. Update documentation
+
+## Security Notes
+
+- Never commit `.env.local` to version control
+- Use a reputable RPC provider for Mainnet (Helius, QuickNode, Alchemy)
+- Monitor your API key usage
+- Rotate keys if compromised

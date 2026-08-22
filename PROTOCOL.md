@@ -14,6 +14,15 @@ Failed or interrupted client operations may leave an OPEN record that can be res
 
 FINALIZED is terminal for HashDrop mutations.
 
+## Publication Method
+
+HashDrop uses Memo Drop for all publications:
+
+- Uses Solana's SPL Memo program
+- No storage account required
+- Content stored in transaction memo
+- Lower cost (only protocol fee + network fee)
+
 ## Metadata account
 
 The metadata account must contain, at minimum:
@@ -31,14 +40,6 @@ The metadata account must contain, at minimum:
 - version number
 
 The exact serialization must be defined in the implementation and kept backward-compatible once deployed.
-
-## Data accounts
-
-Data is divided into deterministic bounded chunks.
-
-Each chunk must contain only the metadata needed to associate it with the correct HashDrop and chunk position plus the actual bytes.
-
-Finalized chunk data must not be modifiable through HashDrop.
 
 ## Instructions
 
@@ -82,6 +83,23 @@ On success, status becomes FINALIZED.
 
 Optional helper instruction. Client-side verification remains mandatory for the product experience.
 
+## Memo Drop Format
+
+The memo payload format is:
+
+```
+HASHDROP|v2|MEMO|<hashDropId>|<sha256>|<mimeType>|<length>|<base64Content>
+```
+
+Where:
+- `v2` - Protocol version
+- `MEMO` - Publication method identifier
+- `<hashDropId>` - Deterministic identifier
+- `<sha256>` - SHA-256 hash of content
+- `<mimeType>` - Content type (e.g., text/plain)
+- `<length>` - Content length in bytes
+- `<base64Content>` - Base64-encoded content
+
 ## Immutability rules
 
 After FINALIZED:
@@ -107,3 +125,38 @@ A valid ON-CHAIN HashDrop must satisfy:
 5. The resulting hash matches metadata.
 
 Only then may the client display VERIFIED ON-CHAIN.
+
+## RPC Architecture
+
+The application uses a hybrid Solana architecture:
+
+- **@solana/kit** = PRIMARY RPC layer for all RPC operations
+- **@solana/web3.js** = ONLY for Phantom compatibility/signing boundary
+
+**Network Configuration:**
+- Devnet: Uses default Solana Devnet RPC (`https://api.devnet.solana.com`)
+- Mainnet: Requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC` environment variable
+
+## Transaction Version Support
+
+| Version | Max Size | Effective Content | Wallet Support |
+|---------|----------|-------------------|----------------|
+| v0      | 1232 B   | ~800 B (base64)   | Phantom, Brave |
+| v1      | 4096 B   | ~2800 B (base64)  | Pending Phantom |
+
+## Memo Drop Transaction Flow
+
+```text
+Connect Wallet
+       ↓
+Build transaction
+       ↓
+Get latest blockhash (Solana Kit RPC)
+       ↓
+Sign with Phantom (web3.js)
+       ↓
+Send transaction (Solana Kit RPC)
+       ↓
+Confirm on-chain
+       ↓
+Show signature

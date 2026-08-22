@@ -44,6 +44,13 @@ The primary action should be obvious:
 - total
 - connect wallet / publish button
 
+## Network Selector
+
+The UI includes a network selector that allows users to switch between:
+
+- Devnet (default)
+- Mainnet (requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC`)
+
 ## Transaction Info Display
 
 The UI displays transaction information:
@@ -52,6 +59,17 @@ The UI displays transaction information:
 - **Transaction Size**: Actual serialized bytes
 - **Max Size**: 1232 (v0) or 4096 (v1)
 - **Available Bytes**: Remaining space for content
+
+## RPC Architecture
+
+The application uses a hybrid Solana architecture:
+
+- **@solana/kit** = PRIMARY RPC layer for all RPC operations
+- **@solana/web3.js** = ONLY for Phantom compatibility/signing boundary
+
+**Network Configuration:**
+- Devnet: Uses default Solana Devnet RPC (`https://api.devnet.solana.com`)
+- Mainnet: Requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC` environment variable
 
 ## Viewer
 
@@ -92,3 +110,13 @@ Before publishing, shows:
 - Transaction version: v0 (1232-byte limit)
 - Warning about Solana transaction
 - Cancel and Confirm buttons
+
+## Network Warning
+
+When Mainnet is selected, the UI displays:
+
+```text
+Mainnet Warning: This will send real SOL from your wallet. Transactions are permanent.
+```
+
+This warning only appears after the component has mounted to prevent hydration mismatch.

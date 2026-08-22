@@ -35,6 +35,21 @@
 - **SPL Memo Program**: `Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH`
 - **Wallet Standard**: Phantom, Brave wallet integration via `window.solana`
 
+## RPC Architecture
+
+The application uses a hybrid Solana architecture:
+
+- **@solana/kit** = PRIMARY RPC layer for all RPC operations
+- **@solana/web3.js** = ONLY for Phantom compatibility/signing boundary
+
+### Network Configuration
+- Devnet: Uses default Solana Devnet RPC (`https://api.devnet.solana.com`)
+- Mainnet: Requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC` environment variable
+
+### RPC Factory Pattern
+- `createRpc()` - Returns the appropriate Solana Kit RPC client
+- `createConnection()` - Returns the appropriate web3.js Connection for Phantom
+
 ## Transaction Support
 
 | Version | Max Size | SDK Support | Wallet Support |
@@ -60,3 +75,17 @@
 
 - **Frontend**: Static hosting (Vercel, Netlify, etc.)
 - **Program**: Solana Devnet/Mainnet (human-approved deployment)
+
+## Environment Configuration
+
+For Mainnet deployment, create a `.env.local` file:
+
+```bash
+# Mainnet RPC URL (REQUIRED for Mainnet)
+NEXT_PUBLIC_SOLANA_MAINNET_RPC=https://mainnet.helius-rpc.com/?api-key=YOUR_API_KEY
+
+# Devnet RPC URL (optional, defaults to Solana Devnet)
+NEXT_PUBLIC_SOLANA_DEVNET_RPC=https://api.devnet.solana.com
+```
+
+**Important:** The application will NOT fall back to the public Solana Mainnet RPC if `NEXT_PUBLIC_SOLANA_MAINNET_RPC` is not configured. You must provide a valid RPC endpoint.

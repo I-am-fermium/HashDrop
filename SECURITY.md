@@ -38,6 +38,19 @@ The frontend must:
 - recompute hashes;
 - never trust an RPC response merely because deserialization succeeded.
 
+## RPC Security
+
+The application uses a hybrid Solana architecture:
+
+- **@solana/kit** = PRIMARY RPC layer for all RPC operations
+- **@solana/web3.js** = ONLY for Phantom compatibility/signing boundary
+
+**Network Configuration:**
+- Devnet: Uses default Solana Devnet RPC (`https://api.devnet.solana.com`)
+- Mainnet: Requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC` environment variable
+
+**Important:** The application does NOT proxy requests through a backend. RPC requests are made directly from the browser to the configured RPC endpoint. Users should review their RPC provider's privacy policy.
+
 ## Sensitive data
 
 Never ask for or store:
@@ -92,3 +105,16 @@ Before mainnet deployment:
 - [ ] End-to-end tests pass
 - [ ] Security audit completed
 - [ ] Incident response plan documented
+
+## RPC Configuration Security
+
+**Do NOT hard-code API keys in source code.**
+
+The application requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC` to be set via environment variable. This is a browser-exposed variable, so:
+
+1. Use a reputable RPC provider (Helius, QuickNode, Alchemy, etc.)
+2. Monitor your API key usage
+3. Rotate keys if compromised
+4. Consider rate limiting at the provider level
+
+**Never commit `.env.local` to version control.** It is already listed in `.gitignore`.

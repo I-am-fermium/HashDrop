@@ -59,3 +59,21 @@ The ID is generated during content processing and included in the V2 memo payloa
 
 ```
 HASHDROP|v2|MEMO|<hashDropId>|<sha256>|<mimeType>|<length>|<base64Content>
+```
+
+## Memo Drop Format
+
+The complete memo payload format is:
+
+```
+HASHDROP|v2|MEMO|<hashDropId>|<sha256>|<mimeType>|<length>|<base64Content>
+```
+
+Where:
+- `v2` - Protocol version
+- `MEMO` - Publication method identifier
+- `<hashDropId>` - Deterministic identifier
+- `<sha256>` - SHA-256 hash of content
+- `<mimeType>` - Content type (e.g., text/plain)
+- `<length>` - Content length in bytes
+- `<base64Content>` - Base64-encoded content

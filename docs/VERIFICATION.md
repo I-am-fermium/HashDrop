@@ -12,6 +12,17 @@ Verification must be understandable without trusting a HashDrop backend.
 
 If any check fails, show a verification failure rather than a best-effort preview.
 
+## RPC Architecture
+
+The application uses a hybrid Solana architecture:
+
+- **@solana/kit** = PRIMARY RPC layer for all RPC operations
+- **@solana/web3.js** = ONLY for Phantom compatibility/signing boundary
+
+**Network Configuration:**
+- Devnet: Uses default Solana Devnet RPC (`https://api.devnet.solana.com`)
+- Mainnet: Requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC` environment variable
+
 ## Memo Drop Verification
 
 For Memo Drop publications, verification works as follows:
@@ -19,17 +30,17 @@ For Memo Drop publications, verification works as follows:
 ```
 Transaction Signature
            ↓
-     Fetch Transaction
+      Fetch Transaction
            ↓
-     Find Memo Instruction
+      Find Memo Instruction
            ↓
-     Decode HashDrop Payload
+      Decode HashDrop Payload
            ↓
-     Recompute Content Hash
+      Recompute Content Hash
            ↓
-     Verify Hash Match
+      Verify Hash Match
            ↓
-     ✅ VERIFIED
+      ✅ VERIFIED
 ```
 
 The memo payload format is:
@@ -69,3 +80,17 @@ When verified successfully, displays:
 - Content size
 - Transaction signature
 - Transaction version (legacy/v0/v1)
+
+## Network-Specific Verification
+
+### Devnet
+
+- Uses default Solana Devnet RPC
+- No API key required
+- Test transactions for verification
+
+### Mainnet
+
+- Requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC` to be configured
+- Uses Helius, QuickNode, or other RPC provider
+- Real on-chain transactions for verification
