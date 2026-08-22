@@ -4,24 +4,24 @@
 
 ```text
                HashDrop
-                    |
-             Content
-                    |
-             SHA-256
-                    |
-           HashDrop ID
-                    |
-           V2 Memo Drop
-                    |
-           Solana Devnet
-                    |
-         Transaction Signature
-                    |
-               Retrieval
-                    |
-           Content Verification
-                    |
-               ✅ VERIFIED
+                     |
+              Content
+                     |
+              SHA-256
+                     |
+            HashDrop ID
+                     |
+            V2 Memo Drop
+                     |
+            Solana Network
+                     |
+          Transaction Signature
+                     |
+                Retrieval
+                     |
+            Content Verification
+                     |
+                ✅ VERIFIED
 ```
 
 No Storage Drop.
@@ -32,7 +32,24 @@ No backend.
 
 The application is a Memo-only, zero-backend protocol.
 
-## Frontend
+## Frontend Architecture
+
+### RPC Layer (Solana Kit Primary)
+
+The application uses a hybrid Solana architecture:
+
+- **@solana/kit** = PRIMARY RPC layer for all RPC operations
+- **@solana/web3.js** = ONLY for Phantom compatibility/signing boundary
+
+**Network Configuration:**
+- Devnet: Uses default Solana Devnet RPC (`https://api.devnet.solana.com`)
+- Mainnet: Requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC` environment variable
+
+**RPC Factory Pattern:**
+- `createRpc()` - Returns the appropriate Solana Kit RPC client
+- `createConnection()` - Returns the appropriate web3.js Connection for Phantom
+
+### Frontend
 
 The frontend is a client, not a canonical database.
 
@@ -72,6 +89,23 @@ The SPL Memo program stores the content directly in the transaction instruction.
 4. Serialize and validate size
 5. Sign with wallet
 6. Send to Solana network
+
+### RPC Operations
+
+All RPC operations use Solana Kit:
+
+- `getLatestBlockhash()` - Via `rpc.getLatestBlockhash({ commitment: 'confirmed' }).send()`
+- `getBalance()` - Via Kit RPC
+- `getTransaction()` - Via Kit RPC
+- `simulateTransaction()` - Via Kit RPC
+
+### Transaction Signing
+
+Transaction signing uses web3.js for Phantom compatibility:
+
+- Build VersionedTransaction using web3.js
+- Sign via `wallet.signTransaction()` (Phantom)
+- Send via `connection.sendRawTransaction()` (web3.js Connection)
 
 ## Verification
 
@@ -113,16 +147,21 @@ No storage accounts are created. No chunking is needed. The transaction itself i
 ## Transaction Version Support
 
 ### Current Implementation
+
 - **Version**: v0
 - **Max Size**: 1232 bytes
 - **Wallet Support**: Phantom, Brave (via signTransaction)
+- **RPC Layer**: Solana Kit
 
 ### Target Implementation
+
 - **Version**: v1
 - **Max Size**: 4096 bytes
 - **Wallet Support**: Pending Phantom v1 signing support
+- **RPC Layer**: Solana Kit
 
 ### Version Detection
+
 The application detects transaction capabilities at runtime:
 - Checks for `compileToV1Message()` in web3.js
 - Checks for `compileTransactionMessage()` in Kit
@@ -150,6 +189,7 @@ Uses direct `window.solana` API for compatibility with Phantom/Brave wallets.
 - disconnected
 - connecting
 - connected
+- network switching/selecting
 - transaction awaiting approval
 - transaction submitted
 - confirmation pending
@@ -158,3 +198,47 @@ Uses direct `window.solana` API for compatibility with Phantom/Brave wallets.
 - expired
 - insufficient funds
 - RPC failure
+
+## Network Configuration
+
+### Environment Variables
+
+- `NEXT_PUBLIC_SOLANA_DEVNET_RPC` - Devnet RPC URL (optional, defaults to Solana Devnet)
+- `NEXT_PUBLIC_SOLANA_MAINNET_RPC` - Mainnet RPC URL (REQUIRED for Mainnet)
+
+### Network Selection
+
+Users can switch networks via:
+- URL parameter `?network=mainnet`
+- Network selector in the UI
+- localStorage setting
+
+### RPC Factory
+
+```typescript
+// Get Solana Kit RPC client
+const rpc = createRpc();
+
+// Get web3.js Connection for Phantom
+const connection = createConnection();
+```
+
+## Error Handling
+
+RPC errors are captured and logged with safe information:
+
+```typescript
+console.error('[HashDrop] getLatestBlockhash failed:', {
+  operation: 'getLatestBlockhash',
+  network,
+  provider,
+  message: error?.message,
+  code: error?.code,
+});
+```
+
+Never logs:
+- API keys
+- Full RPC URLs with credentials
+- Query parameters
+- Authorization headers

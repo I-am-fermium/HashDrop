@@ -62,6 +62,19 @@ Solana Transaction (SPL Memo)
 On-chain (public)
 ```
 
+## RPC Architecture
+
+The application uses a hybrid Solana architecture:
+
+- **@solana/kit** = PRIMARY RPC layer for all RPC operations
+- **@solana/web3.js** = ONLY for Phantom compatibility/signing boundary
+
+**Network Configuration:**
+- Devnet: Uses default Solana Devnet RPC (`https://api.devnet.solana.com`)
+- Mainnet: Requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC` environment variable
+
+**Important:** The application does NOT log or transmit any user data. RPC requests are made directly from the browser to the configured RPC endpoint.
+
 ## User Control
 
 Users control their data by:
@@ -82,3 +95,14 @@ The application does not:
 - Share information
 
 All processing happens in the browser.
+
+## RPC Privacy
+
+RPC requests are made directly from the browser to the configured RPC endpoint. The application does not:
+
+- Proxy requests through a backend
+- Add tracking headers
+- Modify request payloads
+- Store RPC responses
+
+Users should review their RPC provider's privacy policy for information about how RPC requests are handled.

@@ -85,12 +85,19 @@ Installed packages:
 - TypeScript 7.0.2 ✅
 - Strict mode ✅
 
-### Phase 6: ESLint Migration ⏳ IN PROGRESS
+### Phase 6: RPC Migration ✅ COMPLETE
+
+- Solana Kit as primary RPC layer ✅
+- RPC factory pattern implemented ✅
+- Network-specific RPC configuration ✅
+- `createRpc()` and `createConnection()` functions ✅
+
+### Phase 7: ESLint Migration ⏳ IN PROGRESS
 
 - ESLint 10.x has breaking changes
 - Configuration needs update
 
-### Phase 7: Jest Migration ⏳ IN PROGRESS
+### Phase 8: Jest Migration ⏳ IN PROGRESS
 
 - Jest 30.4.2 ✅
 - Configuration format changes may need update
@@ -119,6 +126,7 @@ Installed packages:
 - [x] Solana web3.js 1.91.0 → 1.98.4
 - [x] Solana Kit 7.1.1
 - [x] Solana Program Memo 0.12.0
+- [x] RPC Migration to Solana Kit
 
 ### In Progress:
 - [ ] ESLint 10.x migration
@@ -130,3 +138,5 @@ Installed packages:
 - Solana v1 transaction support is available in the SDK but wallet support is pending
 - The application currently uses v0 transactions due to Phantom wallet limitations
 - All 30 tests are passing with the current configuration
+- RPC operations now use Solana Kit as the primary layer
+- Mainnet requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC` to be configured

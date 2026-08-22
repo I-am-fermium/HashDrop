@@ -68,6 +68,18 @@ npm run dev
 - Check the transaction signature in the UI
 - View on Solana Explorer: https://explorer.solana.com/?tx=<signature>&cluster=devnet
 
+## RPC Architecture
+
+The application uses a hybrid Solana architecture:
+
+- **@solana/kit** = PRIMARY RPC layer for all RPC operations
+- **@solana/web3.js** = ONLY for Phantom compatibility/signing boundary
+
+**Devnet RPC Configuration:**
+- Uses default Solana Devnet RPC (`https://api.devnet.solana.com`)
+- No API key required
+- No environment variable needed
+
 ## Transaction Version Notes
 
 ### Current Implementation (v0)

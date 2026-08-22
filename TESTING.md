@@ -115,6 +115,19 @@ Every protocol bug fixed should receive a regression test where practical.
 - ⏳ v0 V2 retrieval → PASS
 - ⏳ v1 V2 retrieval → PASS
 
+## RPC Migration Testing
+
+### Solana Kit RPC Tests
+- ✅ getLatestBlockhash via Solana Kit RPC
+- ✅ Network-specific RPC selection
+- ✅ Devnet RPC configuration
+- ✅ Mainnet RPC configuration (requires env var)
+
+### Network Switching Tests
+- ✅ Devnet → Mainnet connection switch
+- ✅ Mainnet → Devnet connection switch
+- ✅ Hydration mismatch fixed
+
 ## Running Tests
 
 ```bash
@@ -135,3 +148,15 @@ npm run test:coverage
 - Verification: 100%
 - Transaction building: 100%
 - Wallet integration: 100%
+
+## Build Verification
+
+```bash
+# Build the project
+npm run build
+
+# Verify TypeScript compilation
+npx tsc --noEmit
+```
+
+**Status**: ✅ Build successful, ✅ TypeScript compilation clean

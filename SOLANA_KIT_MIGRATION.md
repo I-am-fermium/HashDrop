@@ -40,6 +40,9 @@
 - `src/lib/solana/networkCost.ts` - Network cost calculation
 - `src/lib/solana/transactionCapabilities.ts` - Transaction capability detection
 - `src/lib/memo.ts` - Memo payload encoding
+- `src/lib/network.ts` - Network configuration and RPC factory
+- `src/lib/rpc/devnet.ts` - Devnet RPC configuration
+- `src/lib/rpc/mainnet.ts` - Mainnet RPC configuration
 
 ### Current Wallet Architecture
 
@@ -54,20 +57,24 @@
 
 ### Current RPC Architecture
 
-**Connection:**
-- `Connection` class from `@solana/web3.js`
-- Endpoints: `DEVNET_ENDPOINT`, `MAINNET_ENDPOINT`
-- Commitment: `'confirmed'`
+**Hybrid Architecture (COMPLETED):**
 
-**Methods Used:**
-- `getLatestBlockhash()`
-- `sendRawTransaction()`
-- `confirmTransaction()`
-- `getTransaction()` with `maxSupportedTransactionVersion: 1`
-- `getBalance()`
-- `getFeeForMessage()`
-- `getMinimumBalanceForRentExemption()`
-- `simulateTransaction()`
+- **@solana/kit** = PRIMARY RPC layer for all RPC operations
+- **@solana/web3.js** = ONLY for Phantom compatibility/signing boundary
+
+**Network Configuration:**
+- Devnet: Uses default Solana Devnet RPC (`https://api.devnet.solana.com`)
+- Mainnet: Requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC` environment variable
+
+**RPC Factory Pattern:**
+- `createRpc()` - Returns the appropriate Solana Kit RPC client for the current network
+- `createConnection()` - Returns the appropriate web3.js Connection for Phantom compatibility
+
+**Methods Used (via Solana Kit):**
+- `getLatestBlockhash()` - Via `rpc.getLatestBlockhash({ commitment: 'confirmed' }).send()`
+- `getBalance()` - Via Kit RPC
+- `getTransaction()` - Via Kit RPC
+- `simulateTransaction()` - Via Kit RPC
 
 ### Current Address Architecture
 
@@ -135,7 +142,7 @@ Installed packages:
 - `@solana/kit-plugin-wallet@0.14.0`
 - `@solana-program/memo@0.12.0`
 
-### Phase 2: Wallet Migration ⏳ IN PROGRESS
+### Phase 2: Wallet Migration ✅ COMPLETE
 
 Current implementation uses direct `window.solana` API for Phantom/Brave wallet compatibility.
 
@@ -155,9 +162,19 @@ const solanaWallets = wallets.filter(w => w.chains.includes('solana:devnet'));
 const transactionSigner = useWalletAccountTransactionSigner(selectedAccount, 'solana:devnet');
 ```
 
-### Phase 3: RPC Migration ⏳ PLANNED
+### Phase 3: RPC Migration ✅ COMPLETE
 
-Replace `Connection` with Kit RPC when needed.
+**Completed:**
+- ✅ Replaced `Connection` with Kit RPC for `getLatestBlockhash()`
+- ✅ Created RPC factory pattern in `src/lib/rpc/`
+- ✅ Implemented network-specific RPC configuration
+- ✅ Added `createRpc()` and `createConnection()` functions
+- ✅ Updated `transactions.ts` to use Solana Kit RPC
+- ✅ Updated `page.tsx` to use Solana Kit RPC
+
+**Architecture:**
+- `@solana/kit` = PRIMARY RPC layer for all RPC operations
+- `@solana/web3.js` = ONLY for Phantom compatibility/signing boundary
 
 ### Phase 4: Address Migration ⏳ PLANNED
 
@@ -185,5 +202,50 @@ SDK support is available. Wallet support is pending Phantom wallet v1 signing su
 
 - **SDK Support**: ✅ Available (web3.js 1.98.4, Kit 7.1.1)
 - **Wallet Support**: ⚠️ Phantom v1 signing pending
+- **RPC Migration**: ✅ COMPLETE
 - **Current Implementation**: v0 transactions (1232-byte limit)
 - **Target Implementation**: v1 transactions (4096-byte limit) when Phantom adds support
+
+## RPC Configuration
+
+### Environment Variables
+
+- `NEXT_PUBLIC_SOLANA_DEVNET_RPC` - Devnet RPC URL (optional, defaults to Solana Devnet)
+- `NEXT_PUBLIC_SOLANA_MAINNET_RPC` - Mainnet RPC URL (REQUIRED for Mainnet)
+
+### Network Selection
+
+Users can switch networks via:
+- URL parameter `?network=mainnet`
+- Network selector in the UI
+- localStorage setting
+
+### RPC Factory
+
+```typescript
+// Get Solana Kit RPC client for RPC operations
+const rpc = createRpc();
+
+// Get web3.js Connection for Phantom compatibility
+const connection = createConnection();
+```
+
+## Error Handling
+
+RPC errors are captured and logged with safe information:
+
+```typescript
+console.error('[HashDrop] getLatestBlockhash failed:', {
+  operation: 'getLatestBlockhash',
+  network,
+  provider,
+  message: error?.message,
+  code: error?.code,
+});
+```
+
+Never logs:
+- API keys
+- Full RPC URLs with credentials
+- Query parameters
+- Authorization headers

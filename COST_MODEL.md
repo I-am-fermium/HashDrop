@@ -4,6 +4,17 @@
 
 HashDrop is now a Memo-only, zero-backend protocol. Content is published using Solana transactions with the SPL Memo program.
 
+## RPC Architecture
+
+The application uses a hybrid Solana architecture:
+
+- **@solana/kit** = PRIMARY RPC layer for all RPC operations
+- **@solana/web3.js** = ONLY for Phantom compatibility/signing boundary
+
+**Network Configuration:**
+- Devnet: Uses default Solana Devnet RPC (`https://api.devnet.solana.com`)
+- Mainnet: Requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC` environment variable
+
 ## Visible Payments
 
 HashDrop displays the following costs:
@@ -93,3 +104,41 @@ For Memo Drop:
 - No storage account creation
 
 The transaction itself is the publication record.
+
+## RPC Cost Estimation
+
+The application uses Solana Kit RPC for dynamic fee estimation:
+
+```typescript
+// Get fee for message
+const fee = await rpc.getFeeForMessage(message).send();
+
+// Get minimum balance for rent exemption
+const minBalance = await rpc.getMinimumBalanceForRentExemption(size).send();
+```
+
+## Network-Specific Costs
+
+### Devnet
+- Uses default Solana Devnet RPC
+- No API key required
+- Lower transaction fees (test SOL)
+
+### Mainnet
+- Requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC` environment variable
+- Uses Helius, QuickNode, or other RPC provider
+- Real SOL transaction fees apply
+
+## Environment Configuration
+
+For Mainnet deployment, create a `.env.local` file:
+
+```bash
+# Mainnet RPC URL (REQUIRED for Mainnet)
+NEXT_PUBLIC_SOLANA_MAINNET_RPC=https://mainnet.helius-rpc.com/?api-key=YOUR_API_KEY
+
+# Devnet RPC URL (optional, defaults to Solana Devnet)
+NEXT_PUBLIC_SOLANA_DEVNET_RPC=https://api.devnet.solana.com
+```
+
+**Important:** The application will NOT fall back to the public Solana Mainnet RPC if `NEXT_PUBLIC_SOLANA_MAINNET_RPC` is not configured. You must provide a valid RPC endpoint.

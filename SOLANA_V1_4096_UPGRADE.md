@@ -6,17 +6,17 @@ The existing HashDrop application is already working.
 
 The current application successfully supports:
 
-* V2 Memo publishing
-* Solana Devnet
-* Phantom / Brave wallet
-* SHA-256
-* HashDrop ID generation
-* V2 Memo retrieval
-* Base58 Solana instruction decoding
-* Base64 V2 content decoding
-* SHA-256 verification
-* zero-backend architecture
-* Memo Drop only
+- V2 Memo publishing
+- Solana Devnet
+- Phantom / Brave wallet
+- SHA-256
+- HashDrop ID generation
+- V2 Memo retrieval
+- Base58 Solana instruction decoding
+- Base64 V2 content decoding
+- SHA-256 verification
+- zero-backend architecture
+- Memo Drop only
 
 DO NOT rebuild the application.
 
@@ -136,18 +136,18 @@ Upgrade the existing Memo Drop system so that it:
 
 DO NOT modify:
 
-* HashDrop V2 Memo format
-* HashDrop ID generation
-* SHA-256 generation
-* Base58 retrieval logic
-* Base64 content decoding
-* retrieval UI
-* verification UI
-* Storage Drop
-* wallet connection architecture
-* existing Devnet RPC architecture
-* protocol fee logic
-* unrelated application UI
+- HashDrop V2 Memo format
+- HashDrop ID generation
+- SHA-256 generation
+- Base58 retrieval logic
+- Base64 content decoding
+- retrieval UI
+- verification UI
+- Storage Drop
+- wallet connection architecture
+- existing Devnet RPC architecture
+- protocol fee logic
+- unrelated application UI
 
 Only modify transaction construction, transaction-version selection, size validation, and closely related Memo Drop code.
 
@@ -814,44 +814,44 @@ The final Memo Drop architecture should be:
 
                         Content
                            ↓
-                     UTF-8 bytes
+                      UTF-8 bytes
                            ↓
-                       SHA-256
+                        SHA-256
                            ↓
-                      HashDrop ID
+                     HashDrop ID
                            ↓
-                     V2 Memo Payload
+                      V2 Memo Payload
                            ↓
-               ┌───────────┴───────────┐
-               │                       │
-           v1 available          v1 unavailable
-               │                       │
-               ↓                       ↓
-         Solana v1 tx            existing supported tx
-               │
-               ↓
-       Dynamic serialize()
-               │
-               ↓
-        ≤ 4096 bytes
-               │
-               ↓
-         Wallet signs
-               │
-               ↓
-         Solana Devnet
-               │
-               ↓
-           Finalized
-               │
-               ↓
-           Retrieval
-               │
-               ↓
-        SHA-256 verify
-               │
-               ↓
-           ✅ VERIFIED
+                ┌───────────┴───────────┐
+                │                       │
+            v1 available          v1 unavailable
+                │                       │
+                ↓                       ↓
+          Solana v1 tx            existing supported tx
+                │
+                ↓
+        Dynamic serialize()
+                │
+                ↓
+         ≤ 4096 bytes
+                │
+                ↓
+          Wallet signs
+                │
+                ↓
+          Solana Devnet
+                │
+                ↓
+            Finalized
+                │
+                ↓
+            Retrieval
+                │
+                ↓
+         SHA-256 verify
+                │
+                ↓
+            ✅ VERIFIED
 ```
 
 ---
@@ -954,3 +954,20 @@ Use dynamic serialization to determine the exact usable capacity.
 Preserve the existing working HashDrop application.
 
 Only the transaction-capacity/version layer should change.
+
+---
+
+## 33. RPC ARCHITECTURE
+
+The application uses a hybrid Solana architecture:
+
+- **@solana/kit** = PRIMARY RPC layer for all RPC operations
+- **@solana/web3.js** = ONLY for Phantom compatibility/signing boundary
+
+**Network Configuration:**
+- Devnet: Uses default Solana Devnet RPC (`https://api.devnet.solana.com`)
+- Mainnet: Requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC` environment variable
+
+**RPC Factory Pattern:**
+- `createRpc()` - Returns the appropriate Solana Kit RPC client
+- `createConnection()` - Returns the appropriate web3.js Connection for Phantom

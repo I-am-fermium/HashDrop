@@ -39,6 +39,28 @@ The wallet layer supports compatible Solana wallets such as Phantom and other wa
 | Solflare | ✅ | Unknown |
 | Sollet | ✅ | Unknown |
 
+## RPC Architecture
+
+The application uses a hybrid Solana architecture:
+
+- **@solana/kit** = PRIMARY RPC layer for all RPC operations
+- **@solana/web3.js** = ONLY for Phantom compatibility/signing boundary
+
+### Network Configuration
+
+- **Devnet**: `https://api.devnet.solana.com` (default)
+- **Mainnet**: Requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC` environment variable
+
+### RPC Factory Pattern
+
+```typescript
+// Get Solana Kit RPC client for RPC operations
+const rpc = createRpc();
+
+// Get web3.js Connection for Phantom compatibility
+const connection = createConnection();
+```
+
 ## Rules
 
 - Never request or handle private keys.
@@ -68,16 +90,60 @@ The application must preserve enough local state to resume an interrupted workfl
 
 ## Transaction Signing Flow
 
-1. Build VersionedTransaction
+1. Build VersionedTransaction using web3.js
 2. Call `wallet.signTransaction(transaction)`
 3. User approves in wallet
 4. Receive signed transaction
-5. Serialize and send via `connection.sendRawTransaction()`
+5. Send via `connection.sendRawTransaction()` (web3.js Connection)
 6. Confirm transaction
 
 ## Network Selection
 
-- Devnet: `https://api.devnet.solana.com`
-- Mainnet: `https://api.mainnet-beta.solana.com`
+Users can switch networks via:
 
-Users can switch networks via URL parameter `?network=mainnet`
+- URL parameter `?network=mainnet`
+- Network selector in the UI
+- localStorage setting
+
+### Environment Configuration
+
+For Mainnet deployment, create a `.env.local` file:
+
+```bash
+# Mainnet RPC URL (REQUIRED for Mainnet)
+NEXT_PUBLIC_SOLANA_MAINNET_RPC=https://mainnet.helius-rpc.com/?api-key=YOUR_API_KEY
+
+# Devnet RPC URL (optional, defaults to Solana Devnet)
+NEXT_PUBLIC_SOLANA_DEVNET_RPC=https://api.devnet.solana.com
+```
+
+**Important:** The application will NOT fall back to the public Solana Mainnet RPC if `NEXT_PUBLIC_SOLANA_MAINNET_RPC` is not configured. You must provide a valid RPC endpoint.
+
+## RPC Operations
+
+All RPC operations use Solana Kit:
+
+- `getLatestBlockhash()` - Via `rpc.getLatestBlockhash({ commitment: 'confirmed' }).send()`
+- `getBalance()` - Via Kit RPC
+- `getTransaction()` - Via Kit RPC
+- `simulateTransaction()` - Via Kit RPC
+
+## Error Handling
+
+RPC errors are captured and logged with safe information:
+
+```typescript
+console.error('[HashDrop] getLatestBlockhash failed:', {
+  operation: 'getLatestBlockhash',
+  network,
+  provider,
+  message: error?.message,
+  code: error?.code,
+});
+```
+
+Never logs:
+- API keys
+- Full RPC URLs with credentials
+- Query parameters
+- Authorization headers

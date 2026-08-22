@@ -8,11 +8,22 @@ All notable project changes are recorded here.
 - Solana v1 transaction support infrastructure (SDK detection, capability checking)
 - Dynamic transaction size validation based on actual serialization
 - v1 transaction retrieval support (maxSupportedTransactionVersion: 1)
+- RPC factory pattern with `createRpc()` and `createConnection()` functions
+- Network-specific RPC configuration in `src/lib/rpc/`
+- Solana Kit as primary RPC layer for all RPC operations
 
 ### Changed
 - Transaction building now uses v0 format due to Phantom wallet v1 signing limitations
 - Transaction size validation uses actual serialized size, not content length
 - UI displays transaction version and available bytes dynamically
+- `getLatestBlockhash()` now uses Solana Kit RPC instead of web3.js Connection
+- Mainnet RPC configuration now requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC` to be set
+- Network state initialization fixed to prevent hydration mismatch
+
+### Fixed
+- Mainnet RPC 403 error - now requires explicit RPC configuration
+- Hydration mismatch in network state - initializes to 'devnet' for SSR compatibility
+- RPC layer now properly separated from wallet signing layer
 
 ## Phase 0 - Foundation (2026-08-12)
 
@@ -99,6 +110,24 @@ All notable project changes are recorded here.
 - Memo module tests (encodeMemoPayload, decodeMemoPayload, canFitInMemo, calculateTransactionSize)
 - Verification tests (verifyMemoDrop, verifyBySignature)
 
+## Phase 6 - RPC Migration (2026-08-22)
+
+### Added
+- RPC factory pattern with `createRpc()` and `createConnection()` functions
+- Network-specific RPC configuration in `src/lib/rpc/`
+- Solana Kit as primary RPC layer for all RPC operations
+- Diagnostic logging for RPC operations
+
+### Changed
+- `getLatestBlockhash()` now uses Solana Kit RPC instead of web3.js Connection
+- Mainnet RPC configuration now requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC` to be set
+- Network state initialization fixed to prevent hydration mismatch
+
+### Fixed
+- Mainnet RPC 403 error - now requires explicit RPC configuration
+- Hydration mismatch in network state - initializes to 'devnet' for SSR compatibility
+- RPC layer now properly separated from wallet signing layer
+
 ## Current Status
 
 ✅ Build successful
@@ -106,5 +135,6 @@ All notable project changes are recorded here.
 ✅ Memo Drop feature complete
 ✅ Wallet integration working
 ✅ v1 SDK support available
+✅ Solana Kit RPC migration complete
 ⚠️ v1 wallet support pending (Phantom)
 ⏳ Devnet deployment pending human approval

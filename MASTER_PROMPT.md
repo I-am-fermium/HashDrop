@@ -142,11 +142,11 @@ Program invariants must be enforced on-chain rather than only in the frontend.
 Show two separate cost concepts:
 
 1. HashDrop Protocol Fee.
-2. Solana Storage Funding.
+2. Solana Network Fee.
 
-Do not represent storage funding as protocol revenue.
+Do not represent network fees as protocol revenue.
 
-Calculate storage from the actual account layout and current network rules.
+Calculate fees from the actual transaction configuration and current network rules.
 
 ## Security rules
 
@@ -185,11 +185,22 @@ Cline must stop and request review for these changes.
 
 ## Current Project State
 
-**Phase 5 Complete**: Memo Drop implementation finished
-**Status**: Testing & Verification complete
+**Phase 6 Complete**: RPC Migration to Solana Kit finished
+**Status**: Memo Drop implementation complete, testing complete
 **Tests**: 30/30 passing
 **Build**: Successful
-**Next**: Devnet deployment (human required)
+**Next**: Devnet deployment (human required), Mainnet testing (requires RPC URL)
+
+## RPC Architecture
+
+The application uses a hybrid Solana architecture:
+
+- **@solana/kit** = PRIMARY RPC layer for all RPC operations
+- **@solana/web3.js** = ONLY for Phantom compatibility/signing boundary
+
+**Network Configuration:**
+- Devnet: Uses default Solana Devnet RPC (`https://api.devnet.solana.com`)
+- Mainnet: Requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC` environment variable
 
 ## Transaction Version Support
 

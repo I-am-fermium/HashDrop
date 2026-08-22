@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**Phase 5 Complete**: Memo Drop implementation finished
+**Phase 6 Complete**: RPC Migration to Solana Kit finished
 
 ## Prerequisites
 
@@ -57,6 +57,33 @@ npx tsc --noEmit
 ✅ TypeScript compilation clean
 ✅ ESLint passing
 
+## Environment Configuration
+
+### Required for Mainnet
+
+Create a `.env.local` file in the project root:
+
+```bash
+# Mainnet RPC URL (REQUIRED for Mainnet)
+NEXT_PUBLIC_SOLANA_MAINNET_RPC=https://mainnet.helius-rpc.com/?api-key=YOUR_API_KEY
+
+# Devnet RPC URL (optional, defaults to Solana Devnet)
+NEXT_PUBLIC_SOLANA_DEVNET_RPC=https://api.devnet.solana.com
+```
+
+**Important:** The application will NOT fall back to the public Solana Mainnet RPC if `NEXT_PUBLIC_SOLANA_MAINNET_RPC` is not configured. You must provide a valid RPC endpoint.
+
+### RPC Architecture
+
+The application uses a hybrid Solana architecture:
+
+- **@solana/kit** = PRIMARY RPC layer for all RPC operations
+- **@solana/web3.js** = ONLY for Phantom compatibility/signing boundary
+
+**RPC Factory Pattern:**
+- `createRpc()` - Returns the appropriate Solana Kit RPC client
+- `createConnection()` - Returns the appropriate web3.js Connection for Phantom
+
 ## Deployment
 
 ### Frontend
@@ -77,16 +104,6 @@ The Solana program requires:
 3. Build with `cargo build-sbf`
 4. Deploy with `solana program deploy`
 
-## Environment Variables
-
-### Required
-
-- `NEXT_PUBLIC_RPC_URL`: Solana RPC endpoint (default: https://api.devnet.solana.com)
-
-### Optional
-
-- `NEXT_PUBLIC_PROGRAM_ID`: HashDrop program ID
-
 ## Current Transaction Limits
 
 | Version | Max Size | Effective Content |
@@ -100,3 +117,4 @@ The Solana program requires:
 2. Build and deploy Solana program
 3. Update PROGRAM_ID in constants.ts
 4. Test end-to-end publishing on devnet
+5. Test Mainnet publishing with Helius RPC
