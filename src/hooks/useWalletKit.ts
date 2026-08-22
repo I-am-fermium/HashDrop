@@ -12,7 +12,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Connection, PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js';
 
-import { getRpcUrl, getCurrentNetwork, setCurrentNetwork, Network, getNetworkConfig } from '../lib/network';
+import { getRpcUrl, getCurrentNetwork, setCurrentNetwork, Network, getNetworkConfig, createConnection, getRpcUrlForLogging } from '../lib/network';
 import { getConnection } from '../lib/solana/networkCost';
 
 // Network configuration
@@ -54,11 +54,26 @@ export function useWalletKit(): UseWalletResult {
 
   // Initialize connection and network
   useEffect(() => {
-    const conn = new Connection(getRpcUrl(), 'confirmed');
+    const conn = createConnection();
+    console.log('[HashDrop] Connection initialized:', {
+      network,
+      rpc: getRpcUrlForLogging(),
+    });
     setConnection(conn);
     const currentNetwork = getCurrentNetwork();
     setNetworkState(currentNetwork);
   }, []);
+
+  // Handle network changes - update connection when network changes
+  useEffect(() => {
+    const conn = createConnection();
+    console.log('[HashDrop] Network changed, updating connection:', {
+      oldNetwork: network,
+      newNetwork: getCurrentNetwork(),
+      rpc: getRpcUrlForLogging(),
+    });
+    setConnection(conn);
+  }, [network]);
 
   // Check wallet connection status
   useEffect(() => {
@@ -117,6 +132,7 @@ export function useWalletKit(): UseWalletResult {
         console.log('[HashDrop] Wallet connected:', {
           publicKey: pubKeyStr,
           network: network,
+          rpc: getRpcUrlForLogging(),
         });
       } else {
         throw new Error('No public key returned from wallet');
@@ -217,7 +233,7 @@ export function useWalletKit(): UseWalletResult {
     }
 
     try {
-      const conn = connection || new Connection(getRpcUrl(), 'confirmed');
+      const conn = connection || createConnection();
 
       // Validate transaction
       if (!transaction) {
@@ -231,7 +247,8 @@ export function useWalletKit(): UseWalletResult {
 
       console.log('[HashDrop] Sending transaction:', {
         publicKey,
-        network: network,
+        network: getCurrentNetwork(),
+        rpc: getRpcUrlForLogging(),
       });
 
       // Sign transaction with wallet
@@ -256,6 +273,16 @@ export function useWalletKit(): UseWalletResult {
         message: error?.message,
         code: error?.code,
       });
+
+      // Handle RPC errors (403, etc.)
+      if (error?.code === 403 || error?.message?.includes('403')) {
+        return {
+          success: false,
+          signature: null,
+          error: `RPC Access forbidden (403). Check your Mainnet RPC configuration. The configured RPC endpoint rejected the request. You may need to set NEXT_PUBLIC_SOLANA_MAINNET_RPC in your .env.local file with a valid RPC provider URL.`,
+          blockTime: null,
+        };
+      }
 
       // Handle user rejection
       if (error?.name === 'UserRejectedTransactionError' ||
@@ -296,7 +323,7 @@ export function useWalletKit(): UseWalletResult {
         blockTime: null,
       };
     }
-  }, [isConnected, publicKey, connection, wallet, network]);
+  }, [isConnected, publicKey, connection]);
 
   return {
     publicKey,

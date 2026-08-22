@@ -18,7 +18,7 @@ import {
   TransactionVersionType,
   V1_TRANSACTION_MAX_BYTES,
 } from './solana/transactionCapabilities';
-import { getRpcUrl, getCurrentNetwork, Network } from './network';
+import { getRpcUrl, getCurrentNetwork, Network, createRpc } from './network';
 
 // Re-export for use by other modules
 export { _detectTransactionCapabilities as detectTransactionCapabilities };
@@ -44,14 +44,35 @@ export async function buildMemoDropTransaction(
   const capabilities = await _detectTransactionCapabilities(connection);
   console.log('[HashDrop] Transaction capabilities:', capabilities);
   
-  // Get latest blockhash using web3.js Connection
+  // Get latest blockhash using Solana Kit RPC
   let blockhash = '';
   let lastValidBlockHeight: bigint = BigInt(0);
   
-  if (connection) {
-    const blockhashResult = await connection.getLatestBlockhash('confirmed');
-    blockhash = blockhashResult.blockhash;
-    lastValidBlockHeight = BigInt(blockhashResult.lastValidBlockHeight);
+  // Use Solana Kit RPC for getLatestBlockhash
+  const rpc = createRpc();
+  const network = getCurrentNetwork();
+  
+  console.log('[HashDrop] getLatestBlockhash via Solana Kit:', {
+    network,
+    provider: network === 'mainnet' ? 'Helius' : 'Solana',
+  });
+  
+  try {
+    const blockhashResult = await rpc.getLatestBlockhash({ commitment: 'confirmed' }).send();
+    blockhash = blockhashResult.value.blockhash;
+    lastValidBlockHeight = BigInt(blockhashResult.value.lastValidBlockHeight);
+    console.log('[HashDrop] Blockhash obtained:', {
+      blockhash: blockhash.substring(0, 8) + '...',
+      lastValidBlockHeight: lastValidBlockHeight.toString(),
+    });
+  } catch (error: any) {
+    console.error('[HashDrop] getLatestBlockhash failed:', {
+      operation: 'getLatestBlockhash',
+      network,
+      message: error?.message || 'Unknown error',
+      code: error?.code,
+    });
+    throw error;
   }
   
   // Encode content as base64 for V2 format (UTF-8 safe)
@@ -199,8 +220,6 @@ export async function buildAndValidateTransaction(
   version: TransactionVersionType;
   capabilities: SolanaTransactionCapabilities;
 }> {
-  const conn = connection || new Connection(getRpcUrl(), 'confirmed');
-  
   const transaction = await buildMemoDropTransaction(
     content,
     hashDropId,
@@ -208,7 +227,7 @@ export async function buildAndValidateTransaction(
     contentType,
     contentSize,
     address,
-    conn
+    connection
   );
   
   const serializedSize = getTransactionSize(transaction);

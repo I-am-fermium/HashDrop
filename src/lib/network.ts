@@ -5,13 +5,14 @@
  * Centralizes all network-dependent operations.
  */
 
-// Default RPC endpoints (can be overridden via environment variables)
-export const DEFAULT_DEVNET_RPC = 'https://api.devnet.solana.com';
-export const DEFAULT_MAINNET_RPC = 'https://api.mainnet-beta.solana.com';
+import { Connection } from '@solana/web3.js';
+import { createSolanaRpc } from '@solana/rpc';
+import type { Rpc } from '@solana/rpc-spec';
+import type { SolanaRpcApi } from '@solana/rpc-api';
 
-// Get RPC endpoint from environment or use default
-export const DEVNET_RPC = process.env.NEXT_PUBLIC_SOLANA_DEVNET_RPC || DEFAULT_DEVNET_RPC;
-export const MAINNET_RPC = process.env.NEXT_PUBLIC_SOLANA_MAINNET_RPC || DEFAULT_MAINNET_RPC;
+// Import network-specific RPC configurations
+import { createDevnetRpc, createDevnetConnection, getDevnetRpcUrl, DEVNET_RPC_URL } from './rpc/devnet';
+import { createMainnetRpc, createMainnetConnection, getMainnetRpcUrl, isMainnetRpcConfigured } from './rpc/mainnet';
 
 // Network type
 export type Network = 'devnet' | 'mainnet';
@@ -25,19 +26,23 @@ export interface NetworkConfig {
   explorerLabel: string;
 }
 
+// Export RPC URLs for backward compatibility (used by constants.ts)
+export const DEVNET_RPC = DEVNET_RPC_URL;
+export const MAINNET_RPC = getMainnetRpcUrl();
+
 // Single source of truth for network configurations
 export const NETWORK_CONFIGS: Record<Network, NetworkConfig> = {
   devnet: {
     network: 'devnet',
     cluster: 'devnet',
-    rpcUrl: DEVNET_RPC,
+    rpcUrl: DEVNET_RPC_URL,
     explorerUrl: (signature: string) => `https://explorer.solana.com/tx/${signature}?cluster=devnet`,
     explorerLabel: 'devnet',
   },
   mainnet: {
     network: 'mainnet',
     cluster: 'mainnet-beta',
-    rpcUrl: MAINNET_RPC,
+    rpcUrl: getMainnetRpcUrl(),
     explorerUrl: (signature: string) => `https://explorer.solana.com/tx/${signature}`,
     explorerLabel: 'mainnet-beta',
   },
@@ -90,7 +95,18 @@ export function getNetworkConfig(): NetworkConfig {
  * Get the RPC URL for the current network
  */
 export function getRpcUrl(): string {
-  return getNetworkConfig().rpcUrl;
+  const network = getCurrentNetwork();
+  if (network === 'mainnet') {
+    if (!isMainnetRpcConfigured()) {
+      throw new Error(
+        'Mainnet RPC is not configured. ' +
+        'Set NEXT_PUBLIC_SOLANA_MAINNET_RPC in your .env.local file. ' +
+        'Example: NEXT_PUBLIC_SOLANA_MAINNET_RPC=https://mainnet.helius-rpc.com/?api-key=YOUR_API_KEY'
+      );
+    }
+    return getMainnetRpcUrl();
+  }
+  return 'https://api.devnet.solana.com';
 }
 
 /**
@@ -142,4 +158,40 @@ export function getNetworkDisplay(): string {
   return config.network === 'mainnet' 
     ? 'Mainnet (Beta)' 
     : 'Devnet';
+}
+
+/**
+ * Create a Connection for the current network
+ * This is the preferred way to get a web3.js Connection
+ */
+export function createConnection(): Connection {
+  const network = getCurrentNetwork();
+  if (network === 'mainnet') {
+    return createMainnetConnection();
+  }
+  return createDevnetConnection();
+}
+
+/**
+ * Create a Solana Kit RPC instance for the current network
+ * This is the preferred way to get a Kit RPC instance
+ */
+export function createRpc(): Rpc<SolanaRpcApi> {
+  const network = getCurrentNetwork();
+  if (network === 'mainnet') {
+    return createMainnetRpc();
+  }
+  return createDevnetRpc();
+}
+
+/**
+ * Get the RPC URL for the current network (for logging/debugging)
+ * Redacts any API keys for safe logging
+ */
+export function getRpcUrlForLogging(): string {
+  const network = getCurrentNetwork();
+  if (network === 'mainnet') {
+    return getMainnetRpcUrl();
+  }
+  return getDevnetRpcUrl();
 }

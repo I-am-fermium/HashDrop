@@ -10,17 +10,17 @@ import type { Rpc } from '@solana/rpc-spec';
 import type { SolanaRpcApi } from '@solana/rpc-api';
 import type { Address } from '@solana/addresses';
 import { Connection } from '@solana/web3.js';
-import { getRpcUrl, getCurrentNetwork, Network } from '../network';
-
-// Create RPC instances for different networks
-export const devnetRpc = createSolanaRpc('https://api.devnet.solana.com');
-export const mainnetRpc = createSolanaRpc('https://api.mainnet-beta.solana.com');
+import { getRpcUrl, getCurrentNetwork, Network, getRpcUrlForLogging } from '../network';
 
 /**
  * Get the current RPC based on the network
  */
 export function getRpc(): Rpc<SolanaRpcApi> {
   const endpoint = getRpcUrl();
+  console.log('[HashDrop] getRpc:', {
+    network: getCurrentNetwork(),
+    rpc: getRpcUrlForLogging(),
+  });
   return createSolanaRpc(endpoint);
 }
 
@@ -33,10 +33,14 @@ export function getCurrentSolanaNetwork(): Network {
 
 /**
  * Get the current Solana Connection (for backward compatibility)
- * @deprecated Use getRpc() instead for Kit-based operations
+ * @deprecated Use createConnection() from network.ts instead for network-aware connections
  */
 export function getConnection(): Connection {
   const endpoint = getRpcUrl();
+  console.log('[HashDrop] getConnection:', {
+    network: getCurrentNetwork(),
+    rpc: getRpcUrlForLogging(),
+  });
   return new Connection(endpoint, 'confirmed');
 }
 

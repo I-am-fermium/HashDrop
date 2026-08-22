@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Transaction, PublicKey, TransactionInstruction, VersionedTransaction } from '@solana/web3.js';
 
 import { useWallet, TransactionResult, getConnection } from '../hooks/useWallet';
@@ -8,7 +8,7 @@ import { useCostEstimate } from '../hooks/useCostEstimate';
 import { processContent, ContentMeta } from '../lib/content';
 import { encodeMemoPayload, canFitInMemo, MEMO_PROGRAM_ID, calculateTransactionSize, LEGACY_TRANSACTION_MAX_BYTES, V1_TRANSACTION_MAX_BYTES } from '../lib/memo';
 import { detectTransactionCapabilities, buildMemoDropTransaction, serializeTransaction } from '../lib/transactions';
-import { Network, getNetworkDisplay } from '../lib/network';
+import { Network, getRpcUrlForLogging, createRpc } from '../lib/network';
 
 import { WalletConnect } from '../components/WalletConnect';
 import { PublishButton } from '../components/PublishButton';
@@ -18,6 +18,23 @@ import { NetworkSelector } from '../components/NetworkSelector';
 
 // Default network fee for memo drop (5000 lamports)
 const DEFAULT_NETWORK_FEE_SOL = 0.000005;
+
+// Helper function to get network display label based on network state
+// This is SSR-safe and matches the network state from useWallet
+function getNetworkDisplayLabel(network: Network): string {
+  return network === 'mainnet' ? 'Mainnet (Beta)' : 'Devnet';
+}
+
+// Helper to get provider name from RPC URL
+function getProviderName(rpcUrl: string): string {
+  if (rpcUrl.includes('helius-rpc.com')) return 'Helius';
+  if (rpcUrl.includes('quicknode.com')) return 'QuickNode';
+  if (rpcUrl.includes('alchemy.com')) return 'Alchemy';
+  if (rpcUrl.includes('solana.fm')) return 'SolanaFM';
+  if (rpcUrl.includes('api.mainnet-beta.solana.com')) return 'Solana';
+  if (rpcUrl.includes('api.devnet.solana.com')) return 'Solana';
+  return 'Custom';
+}
 
 export default function Home() {
   const [content, setContent] = useState('Hello, HashDrop!');
@@ -36,6 +53,13 @@ export default function Home() {
     maxTransactionBytes: number;
     preferredVersion: string;
   } | null>(null);
+
+  // Track mounted state to prevent hydration mismatch
+  // Network state is browser-dependent (reads from localStorage)
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const { isConnected, publicKey, connect, disconnect, sendTransaction, network, setNetwork } = useWallet();
   const { estimate, calculate } = useCostEstimate(content);
@@ -115,18 +139,46 @@ export default function Home() {
     setPublishProgress(20);
 
     try {
-      console.log('[HashDrop] Starting Memo Drop publish');
+      console.log('[HashDrop] Starting Memo Drop publish', {
+        network,
+        rpc: getRpcUrlForLogging(),
+      });
 
       setPublishProgress(40);
+      
+      // Use Solana Kit RPC client for getLatestBlockhash
+      const rpc = createRpc();
+      const provider = getProviderName(getRpcUrlForLogging());
+      
+      // Diagnostic logging for RPC operation
+      console.log('[HashDrop] getLatestBlockhash operation:', {
+        network,
+        provider,
+      });
+      
+      // Get latest blockhash using Solana Kit
+      let blockhashResult;
+      try {
+        blockhashResult = await rpc.getLatestBlockhash({ commitment: 'confirmed' }).send();
+      } catch (blockhashError: any) {
+        console.error('[HashDrop] getLatestBlockhash failed:', {
+          operation: 'getLatestBlockhash',
+          network,
+          provider,
+          message: blockhashError?.message || 'Unknown error',
+          code: blockhashError?.code,
+        });
+        
+        throw blockhashError;
+      }
+      
+      // Extract blockhash and lastValidBlockHeight from Solana Kit response
+      const blockhash = blockhashResult.value.blockhash;
+      const lastValidBlockHeight = BigInt(blockhashResult.value.lastValidBlockHeight);
+
+      // Build the transaction using web3.js Connection (for Phantom compatibility)
       const connection = getConnection();
       
-      // Get transaction capabilities
-      const caps = await detectTransactionCapabilities(connection);
-      const maxTransactionBytes = caps.maxTransactionBytes;
-      
-      // Get latest blockhash
-      const { blockhash } = await connection.getLatestBlockhash('confirmed');
-
       // Build the transaction
       const transaction = await buildMemoDropTransaction(
         content,
@@ -144,20 +196,9 @@ export default function Home() {
 
       console.log('[HashDrop] Memo instruction built', {
         size: transactionSize,
-        maxTransactionBytes,
-        version: caps.preferredVersion,
+        maxTransactionBytes: 128000, // v0 transaction max
+        version: 'v0',
       });
-
-      // Validate transaction size
-      if (transactionSize > maxTransactionBytes) {
-        setLastResult({
-          success: false,
-          signature: null,
-          error: `Transaction size (${transactionSize} bytes) exceeds maximum (${maxTransactionBytes} bytes) for ${caps.preferredVersion} transactions.`,
-          blockTime: null,
-        });
-        return;
-      }
 
       setPublishProgress(60);
 
@@ -183,7 +224,7 @@ export default function Home() {
         blockTime: null,
       });
     }
-  }, [content, contentMeta, publicKey, sendTransaction]);
+  }, [content, contentMeta, publicKey, sendTransaction, network]);
 
   // Cancel publish
   const cancelPublish = useCallback(() => {
@@ -227,14 +268,15 @@ export default function Home() {
             currentNetwork={network} 
             onNetworkChange={setNetwork} 
           />
-          {network === 'mainnet' && (
+          {/* Only show mainnet warning after hydration to prevent mismatch */}
+          {mounted && network === 'mainnet' && (
             <div className="text-xs text-yellow-400 bg-yellow-900/30 px-2 py-1 rounded border border-yellow-600">
               Mainnet uses real SOL. Transactions are permanent.
             </div>
           )}
         </div>
         <div className="text-xs text-secondary mt-2">
-          Network: {getNetworkDisplay()}
+          Network: {getNetworkDisplayLabel(network)}
         </div>
       </section>
 
@@ -270,7 +312,7 @@ export default function Home() {
                 <div className="text-sm text-secondary">
                   {transactionInfo ? (
                     <>
- Transaction: {formatBytes(transactionInfo.transactionSize)} / ~1 KB
+  Transaction: {formatBytes(transactionInfo.transactionSize)} / ~1 KB
                       {transactionInfo.availableBytes < 0 && ' - Content too large'}
                     </>
                   ) : (
@@ -354,7 +396,7 @@ export default function Home() {
               <div className="flex justify-between">
                 <span className="text-secondary">Transaction Size:</span>
                 <span className="text-accent">
- {transactionInfo ? `${formatBytes(transactionInfo.transactionSize)} / ~1 KB (${transactionInfo.version.toUpperCase()})` : 'Calculating...'}
+  {transactionInfo ? `${formatBytes(transactionInfo.transactionSize)} / ~1 KB (${transactionInfo.version.toUpperCase()})` : 'Calculating...'}
                 </span>
               </div>
               
@@ -365,7 +407,8 @@ export default function Home() {
                 </span>
               </div>
               
-              {network === 'mainnet' && (
+              {/* Only show mainnet warning after hydration */}
+              {mounted && network === 'mainnet' && (
                 <div className="bg-yellow-900/30 border border-yellow-600 rounded p-3">
                   <p className="text-sm text-yellow-300">
                     <strong>Mainnet Warning:</strong> This will send real SOL from your wallet. Transactions are permanent.

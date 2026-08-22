@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { PublicKey, VersionedTransaction, Connection } from '@solana/web3.js';
 
-import { getRpcUrl, getCurrentNetwork, setCurrentNetwork, Network, getNetworkConfig } from '../lib/network';
+import { getRpcUrl, getCurrentNetwork, setCurrentNetwork, Network, getNetworkConfig, createConnection, getRpcUrlForLogging } from '../lib/network';
 
 // Transaction result
 export interface TransactionResult {
@@ -32,6 +32,7 @@ export interface UseWalletResult {
 
 /**
  * Get RPC connection for the current network
+ * @deprecated Use createConnection() from network.ts instead
  */
 export function getConnection(): Connection {
   const endpoint = getRpcUrl();
@@ -43,24 +44,44 @@ export function getConnection(): Connection {
  * Compatible with Phantom and other Wallet Standard wallets
  */
 export function useWallet(): UseWalletResult {
-  const [network, setNetworkState] = useState<Network>(getCurrentNetwork());
+  // Initialize network state to 'devnet' for SSR compatibility
+  // This ensures server and initial client render match
+  const [network, setNetworkState] = useState<Network>('devnet');
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [connection, setConnection] = useState<Connection | null>(null);
   const walletRef = useRef<any>(null);
 
-  // Initialize connection and network
+  // After hydration, sync network state from localStorage
+  // This ensures the UI reflects the user's persisted network selection
   useEffect(() => {
-    const conn = getConnection();
-    setConnection(conn);
     const currentNetwork = getCurrentNetwork();
+    console.log('[HashDrop] Hydration complete, syncing network:', {
+      serverNetwork: 'devnet',
+      clientNetwork: currentNetwork,
+    });
     setNetworkState(currentNetwork);
+    
+    // Initialize connection with the correct network
+    const conn = createConnection();
+    console.log('[HashDrop] Connection initialized:', {
+      network: currentNetwork,
+      rpc: getRpcUrlForLogging(),
+    });
+    setConnection(conn);
   }, []);
 
   // Handle network changes - update connection when network changes
   useEffect(() => {
-    const conn = getConnection();
-    setConnection(conn);
+    if (network !== 'devnet') { // Only run after initial hydration
+      const conn = createConnection();
+      console.log('[HashDrop] Network changed, updating connection:', {
+        oldNetwork: 'devnet',
+        newNetwork: network,
+        rpc: getRpcUrlForLogging(),
+      });
+      setConnection(conn);
+    }
   }, [network]);
 
   // Check wallet connection status
@@ -126,6 +147,7 @@ export function useWallet(): UseWalletResult {
         console.log('[HashDrop] Wallet connected:', {
           publicKey: pubKeyStr,
           network: network,
+          rpc: getRpcUrlForLogging(),
         });
       } else {
         throw new Error('No public key returned from wallet');
@@ -220,7 +242,7 @@ export function useWallet(): UseWalletResult {
     }
 
     try {
-      const conn = connection || getConnection();
+      const conn = connection || createConnection();
 
       // Validate transaction
       if (!transaction) {
@@ -282,6 +304,16 @@ export function useWallet(): UseWalletResult {
         code: error?.code,
         stack: error?.stack,
       });
+
+      // Handle RPC errors (403, etc.)
+      if (error?.code === 403 || error?.message?.includes('403')) {
+        return {
+          success: false,
+          signature: null,
+          error: `RPC Access forbidden (403). Check your Mainnet RPC configuration. The configured RPC endpoint rejected the request. You may need to set NEXT_PUBLIC_SOLANA_MAINNET_RPC in your .env.local file with a valid RPC provider URL.`,
+          blockTime: null,
+        };
+      }
 
       // Handle user rejection
       if (error?.name === 'UserRejectedTransactionError' ||

@@ -13,7 +13,7 @@
 
 import { Connection, TransactionMessage, TransactionInstruction, PublicKey, VersionedTransaction } from '@solana/web3.js';
 import { MEMO_PROGRAM_ID } from '../memo';
-import { getCurrentNetwork, Network } from '../network';
+import { getCurrentNetwork, Network, getRpcUrl, getRpcUrlForLogging } from '../network';
 
 // Transaction size limits
 export const LEGACY_TRANSACTION_MAX_BYTES = 1232;
@@ -90,13 +90,18 @@ function sdkSupportsV1(): boolean {
 export async function detectTransactionCapabilities(
   connection?: Connection
 ): Promise<SolanaTransactionCapabilities> {
-  const conn = connection || new Connection(getCurrentNetwork() === 'mainnet' 
-    ? 'https://api.mainnet-beta.solana.com' 
-    : 'https://api.devnet.solana.com', 
-    'confirmed');
+  // Use provided connection or create one from current network's RPC
+  const conn = connection || new Connection(getRpcUrl(), 'confirmed');
   
   // Determine network from connection or use current network
   const network: Network = getCurrentNetwork();
+  
+  // Log for debugging
+  console.log('[HashDrop] detectTransactionCapabilities:', {
+    network,
+    rpc: getRpcUrlForLogging(),
+    providedConnection: !!connection,
+  });
   
   // Check if SDK supports v1 by checking for compileToV1Message or Kit's compileTransactionMessage
   const supportsV1 = sdkSupportsV1();
