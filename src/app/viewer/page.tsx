@@ -125,10 +125,10 @@ export default function Viewer() {
         {/* Transaction Signature Input */}
         <div className="mb-2">
           <h3 className="text-sm font-medium text-secondary mb-2">Transaction Signature</h3>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 md:flex-row md:items-stretch">
             <input
               type="text"
-              className="flex-1 bg-black text-primary font-mono p-2 rounded focus:outline-none focus:ring-2 focus:ring-accent text-xs w-full"
+              className="flex-1 min-w-0 bg-black text-primary font-mono p-2 rounded focus:outline-none focus:ring-2 focus:ring-accent text-xs w-full"
               placeholder="Enter transaction signature..."
               value={signature}
               onChange={(e) => setSignature(e.target.value)}
@@ -136,7 +136,7 @@ export default function Viewer() {
             <button
               onClick={handleVerify}
               disabled={status === 'FETCHING' || status === 'VERIFYING' || !signature}
-              className="bg-accent text-white font-bold py-2 px-4 rounded hover:opacity-90 transition disabled:opacity-50 w-full md:w-auto"
+              className="bg-accent text-white font-bold py-2 px-4 rounded hover:opacity-90 transition disabled:opacity-50 w-full md:w-auto md:shrink-0"
             >
               {status === 'VERIFYING' ? 'Verifying...' : 'RETRIEVE'}
             </button>
