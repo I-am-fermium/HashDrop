@@ -16,9 +16,6 @@ import { CostSummary } from '../components/CostSummary';
 import { ContentEditor } from '../components/ContentEditor';
 import { NetworkSelector } from '../components/NetworkSelector';
 
-// Default network fee for memo drop (5000 lamports)
-const DEFAULT_NETWORK_FEE_SOL = 0.000005;
-
 // Helper function to get network display label based on network state
 // This is SSR-safe and matches the network state from useWallet
 function getNetworkDisplayLabel(network: Network): string {
@@ -232,8 +229,12 @@ export default function Home() {
   }, []);
 
   // Get display cost (Memo Drop only - no storage funding)
+  // NOTE: estimate.totalSol already includes the platform fee + base network fee
+  // (useCostEstimate: networkFeeLamports 5000 + protocolFeeLamports 1,000,000).
+  // Do NOT add DEFAULT_NETWORK_FEE_SOL again here — that caused the
+  // 0.001005 → 0.001010 double-count bug.
   const getDisplayCost = () => {
-    return (estimate?.totalSol || 0) + DEFAULT_NETWORK_FEE_SOL;
+    return estimate?.totalSol || 0;
   };
 
   // Update estimate

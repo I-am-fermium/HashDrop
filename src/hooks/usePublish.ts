@@ -6,15 +6,14 @@
  */
 
 import { useState, useCallback } from 'react';
-import { Connection, PublicKey, Transaction, TransactionInstruction, VersionedTransaction } from '@solana/web3.js';
+import { Connection, PublicKey, SystemProgram, Transaction, TransactionInstruction, VersionedTransaction } from '@solana/web3.js';
 import { processContent, ContentMeta } from '../lib/content';
-import { DEVNET_ENDPOINT } from '../lib/constants';
+import { DEVNET_ENDPOINT, HASHDROP_PLATFORM_FEE_LAMPORTS, HASHDROP_FEE_WALLET } from '../lib/constants';
 import { encodeMemoPayload, canFitInMemo, MEMO_PROGRAM_ID } from '../lib/memo';
 import {
   getBaseTransactionFee,
   getConnection,
   lamportsToSol,
-  solToLamports,
 } from '../lib/solana/networkCost';
 import {
   buildMemoDropTransaction,
@@ -46,9 +45,11 @@ export interface TransactionResult {
   blockTime: number | null;
 }
 
-// Protocol fee
-const PROTOCOL_FEE_SOL = 0.001; // 0.001 SOL
-const PROTOCOL_FEE_LAMPORTS = solToLamports(PROTOCOL_FEE_SOL);
+// Protocol fee (single source of truth in src/lib/constants.ts)
+// NOTE: This hook is currently dead code (not imported by any page). The active
+// publish path lives in src/app/page.tsx + src/lib/transactions.ts. It is kept
+// consistent with the active path so the platform fee is always encoded if this
+// hook is ever reactivated.
 
 // Helper function to get connection (avoids circular import)
 function getConnectionLocal(): Connection {
@@ -151,14 +152,14 @@ export function usePublish() {
       const baseFee = await getBaseTransactionFee();
       return {
         baseFee,
-        protocolFee: PROTOCOL_FEE_LAMPORTS,
-        total: baseFee + PROTOCOL_FEE_LAMPORTS,
+        protocolFee: HASHDROP_PLATFORM_FEE_LAMPORTS,
+        total: baseFee + HASHDROP_PLATFORM_FEE_LAMPORTS,
       };
     } catch {
       return {
         baseFee: 5000,
-        protocolFee: PROTOCOL_FEE_LAMPORTS,
-        total: 5000 + PROTOCOL_FEE_LAMPORTS,
+        protocolFee: HASHDROP_PLATFORM_FEE_LAMPORTS,
+        total: 5000 + HASHDROP_PLATFORM_FEE_LAMPORTS,
       };
     }
   }, []);
@@ -204,12 +205,20 @@ export function usePublish() {
         base64Content
       );
       
-      // Build transaction using v0 format
+      // Build transaction using v0 format (kept consistent with the active path)
       const memoProgramId = new PublicKey(MEMO_PROGRAM_ID);
       const memoInstruction = new TransactionInstruction({
         programId: memoProgramId,
         data: Buffer.from(memoPayload, 'utf-8'),
         keys: [],
+      });
+
+      // HashDrop platform fee: transfer 0.001 SOL to the HashDrop fee wallet.
+      // The user's wallet is the fee payer and the ONLY signer.
+      const transferIx = SystemProgram.transfer({
+        fromPubkey: publicKey,
+        toPubkey: new PublicKey(HASHDROP_FEE_WALLET),
+        lamports: HASHDROP_PLATFORM_FEE_LAMPORTS,
       });
       
       // Create TransactionMessage and compile to v0
@@ -217,7 +226,7 @@ export function usePublish() {
       const transactionMessage = new TransactionMessage({
         payerKey: publicKey,
         recentBlockhash: blockhash,
-        instructions: [memoInstruction],
+        instructions: [transferIx, memoInstruction],
       });
       
       const v0Message = transactionMessage.compileToV0Message();

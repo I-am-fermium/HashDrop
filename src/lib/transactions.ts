@@ -9,7 +9,8 @@
  * - 4096 bytes max transaction size
  */
 
-import { PublicKey, VersionedTransaction, TransactionMessage, TransactionInstruction, Connection } from '@solana/web3.js';
+import { PublicKey, SystemProgram, VersionedTransaction, TransactionMessage, TransactionInstruction, Connection } from '@solana/web3.js';
+import { HASHDROP_PLATFORM_FEE_LAMPORTS, HASHDROP_FEE_WALLET } from './constants';
 import { encodeMemoPayload, MEMO_PROGRAM_ID } from './memo';
 import { utf8ToBase64 } from './encoding';
 import {
@@ -102,8 +103,17 @@ export async function buildMemoDropTransaction(
 /**
  * Build a v1 transaction using Solana web3.js native API
  * Supports up to 4096 bytes
+ *
+ * NOTE: Despite the "V1" name, this currently compiles to a V0 message
+ * (compileToV0Message) for Phantom compatibility.
+ *
+ * The transaction includes the HashDrop platform-fee transfer
+ * (SystemProgram.transfer → HASHDROP_FEE_WALLET) as the first instruction,
+ * followed by the existing SPL Memo instruction.
+ *
+ * Exported for testing/inspection of the compiled transaction.
  */
-function buildV1Transaction(
+export function buildV1Transaction(
   memoPayload: string,
   feePayer: string,
   blockhash: string,
@@ -125,11 +135,25 @@ function buildV1Transaction(
   // Create fee payer key
   const feePayerKey = new PublicKey(feePayer);
   
-  // Build TransactionMessage with memo instruction
+  // HashDrop platform fee: transfer 0.001 SOL (1,000,000 lamports) to the
+  // HashDrop fee wallet. The user's wallet is the fee payer and the ONLY
+  // signer — no second signature or private key is created. Because this
+  // transfer is part of the exact transaction Phantom signs, the fee is
+  // actually deducted from the user on confirmation.
+  const transferIx = SystemProgram.transfer({
+    fromPubkey: feePayerKey,
+    toPubkey: new PublicKey(HASHDROP_FEE_WALLET),
+    lamports: HASHDROP_PLATFORM_FEE_LAMPORTS,
+  });
+  
+  // Build TransactionMessage. Order: platform-fee transfer first, memo second.
   const transactionMessage = new TransactionMessage({
     payerKey: feePayerKey,
     recentBlockhash: blockhash,
-    instructions: [memoInstruction],
+    instructions: [
+      transferIx,
+      memoInstruction,
+    ],
   });
   
   // Compile to V0 message (v0 is supported by Phantom)

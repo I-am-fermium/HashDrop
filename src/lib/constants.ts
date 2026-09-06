@@ -42,7 +42,16 @@ export const getEndpoint = (): string => {
 
 // Protocol configuration
 export const HASHDROP_VERSION = 1;
-export const PROTOCOL_FEE = 0.001; // Example fee, to be configured by human owner
 
 // Token decimals for SOL
 export const SOL_DECIMALS = 9;
+
+// Platform (protocol) fee — single source of truth.
+// The publish transaction transfers 0.001 SOL (1,000,000 lamports) from the
+// user's wallet to HASHDROP_FEE_WALLET via a SystemProgram.transfer instruction
+// (see src/lib/transactions.ts: buildV1Transaction).
+export const HASHDROP_PLATFORM_FEE_LAMPORTS = 1_000_000;
+export const HASHDROP_PLATFORM_FEE_SOL = HASHDROP_PLATFORM_FEE_LAMPORTS / Math.pow(10, SOL_DECIMALS);
+
+// Public receiving wallet for the HashDrop platform fee (NOT a secret, no key material).
+export const HASHDROP_FEE_WALLET = 'Amy4Tej83vsnCdFbBtfWmQrEdRLVF4AVAvZupyka8qQT';

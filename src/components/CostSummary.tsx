@@ -1,6 +1,7 @@
 'use client';
 
 import { CostEstimate } from '../hooks/useCostEstimate';
+import { HASHDROP_PLATFORM_FEE_SOL } from '../lib/constants';
 
 interface CostSummaryProps {
   estimate: CostEstimate;
@@ -10,18 +11,17 @@ interface CostSummaryProps {
 // Default network fee estimate (5000 lamports = 0.000005 SOL)
 const DEFAULT_NETWORK_FEE_SOL = 0.000005;
 
-// Protocol fee is 0.001 SOL
-const PROTOCOL_FEE_SOL = 0.001;
-
 export function CostSummary({ estimate, method = 'memo' }: CostSummaryProps) {
-  // For Memo Drop - show simple cost breakdown
-  const total = PROTOCOL_FEE_SOL + DEFAULT_NETWORK_FEE_SOL;
+  // For Memo Drop - show simple cost breakdown.
+  // The platform fee uses the shared constant so the displayed amount matches
+  // the SystemProgram.transfer instruction encoded in the publish transaction.
+  const total = HASHDROP_PLATFORM_FEE_SOL + DEFAULT_NETWORK_FEE_SOL;
   
   return (
     <div className="space-y-2">
       <div className="flex justify-between">
         <span className="text-secondary">HashDrop Protocol Fee:</span>
-        <span className="text-accent">{PROTOCOL_FEE_SOL.toFixed(6)} SOL</span>
+        <span className="text-accent">{HASHDROP_PLATFORM_FEE_SOL.toFixed(6)} SOL</span>
       </div>
       <div className="flex justify-between">
         <span className="text-secondary">Solana Network Fee:</span>

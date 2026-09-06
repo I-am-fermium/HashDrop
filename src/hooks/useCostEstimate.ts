@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { SOL_DECIMALS } from '../lib/constants';
+import { HASHDROP_PLATFORM_FEE_LAMPORTS } from '../lib/constants';
 import { lamportsToSol, getConnection } from '../lib/solana/networkCost';
 
 /**
@@ -54,8 +54,8 @@ export function useCostEstimate(content: string) {
     // Legacy/V0 transactions support up to 1232 bytes total
     const exceedsMaxSize = false; // Will be determined by actual transaction size
 
-    // Protocol fee in lamports - 0.001 SOL
-    const protocolFeeLamports = 1000000; // 0.001 SOL = 1,000,000 lamports
+    // Protocol fee in lamports - 0.001 SOL (single source of truth)
+    const protocolFeeLamports = HASHDROP_PLATFORM_FEE_LAMPORTS;
     const protocolFeeSol = lamportsToSol(protocolFeeLamports);
 
     // Network fee (estimated - will be fetched from RPC for actual transaction)
