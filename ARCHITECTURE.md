@@ -121,6 +121,26 @@ Verification must be understandable without trusting a HashDrop backend.
 
 If any check fails, show a verification failure rather than a best-effort preview.
 
+### Memo Instruction Extraction
+
+`getTransaction()` returns different message shapes per transaction version:
+
+- legacy (json): `message.accountKeys` + `message.instructions`
+- v0/v1 (json): `message.staticAccountKeys` + `message.compiledInstructions`
+- jsonParsed: `message.accountKeys` (parsed keys) + `message.instructions`
+
+All retrieval paths read both variants (`instructions || compiledInstructions`,
+`accountKeys || staticAccountKeys`) and resolve program IDs via `programIdIndex`.
+Real Devnet/Mainnet v0 responses carry ONLY `staticAccountKeys` +
+`compiledInstructions` (with Buffer instruction data).
+
+### Signature Validation
+
+User-entered signatures are validated canonically before retrieval
+(`src/lib/signature.ts`): trim → Base58 decode → exactly 64 bytes. Base58 of a
+64-byte ed25519 signature is 87 or 88 characters, so a hard-coded textual
+length would reject valid Mainnet signatures. Validation is network-independent.
+
 ## HashDrop Protocol v3
 
 Content is published using Solana transactions with the SPL Memo program.
@@ -205,7 +225,18 @@ Cryptography:
 - On-chain size: ~255 bytes (fits within current 1232-byte Solana limit)
 - Serialized transaction: 492 bytes (measured)
 
-The encrypted content artifact is user-controlled/off-chain.
+The encrypted content artifact is user-controlled/off-chain. The publish result
+UI exports the exact publish-time artifacts client-side (`src/lib/download.ts`,
+Blob downloads — no server):
+
+| File | Content |
+|------|---------|
+| `hashdrop-private-<hashDropId>.hdp` | canonical `HASHDROP-PRIVATE-BLOB\|v1\|…` artifact envelope |
+| `hashdrop-mlkem-768-private-key-<keyFingerprint>.txt` | `HASHDROP-KEY\|v1\|ML-KEM-768\|…` |
+| `hashdrop-mlkem-768-public-key-<keyFingerprint>.txt` | `HASHDROP-PUBKEY\|v1\|ML-KEM-768\|…` |
+
+The Viewer accepts the `.hdp` file (paste or file import) together with the key
+`.txt` for DECRYPT & VERIFY. HashDrop never stores either file.
 
 No storage accounts are created. No chunking is needed. The transaction itself is the publication record.
 

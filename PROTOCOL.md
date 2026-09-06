@@ -267,12 +267,28 @@ Remaining headroom: **740 bytes**
 HASHDROP-PRIVATE-BLOB|v1|<hashDropId>|<sha256>|<contentSize>|<mimeType>|<cryptoVersion>|<keyFingerprint>|<base64-mlkem-ct>|<base64-iv>|<base64-ciphertext>
 ```
 
+The artifact is exported client-side by the publish flow via `exportArtifact()`
+and downloaded as **`hashdrop-private-<hashDropId>.hdp`**
+(`application/octet-stream`). The `.hdp` file contains exactly the canonical
+envelope string above (UTF-8 text) — the extension is only a container
+convention. The Viewer imports the file (read locally as text) or accepts the
+pasted string; both feed the same `importArtifact()` parser. Nothing is ever
+uploaded.
+
 ### Key Export/Import Format
 
 ```
 Secret: HASHDROP-KEY|v1|ML-KEM-768|<base64-secret-key>
 Public: HASHDROP-PUBKEY|v1|ML-KEM-768|<base64-public-key>
 ```
+
+Client-side exports (Blob downloads, no server):
+
+- Secret: **`hashdrop-mlkem-768-private-key-<keyFingerprint>.txt`**
+- Public: **`hashdrop-mlkem-768-public-key-<keyFingerprint>.txt`**
+
+The secret key is never rendered on screen, logged, or included in any URL or
+transaction. Losing the secret key file makes the Private Drop undecryptable.
 
 ### Fingerprint Construction
 

@@ -33,6 +33,12 @@
 - [x] Add production favicon (src/app/icon.svg)
 - [x] Fix Tailwind v4 preflight (globals.css)
 - [x] Fix viewer page mobile layout (signature box overflow)
+- [x] Implement V3 PRIVATE publish recovery exports (.hdp artifact + ML-KEM key downloads, src/lib/download.ts)
+- [x] V3 Viewer result UI (PUBLIC/PROOF/PRIVATE sections, DECRYPT & VERIFY flow)
+- [x] Accept .hdp files in the Viewer artifact file picker
+- [x] Fix v0 retrieval in verifyPrivateDrop/verifyProofDrop (compiledInstructions/staticAccountKeys)
+- [x] Canonical signature validation (src/lib/signature.ts, Base58 → 64 bytes)
+- [x] Fix keyManager.validateKeyPair (previously always returned false)
 
 ## Architecture Summary
 
@@ -45,6 +51,9 @@
   - `memo.ts` - Memo Drop encoding/decoding
   - `transactions.ts` - Transaction builders
   - `verification.ts` - On-chain verification logic
+  - `crypto/` - PRIVATE mode cryptography (AES-256-GCM, ML-KEM-768, HKDF-SHA-256)
+  - `signature.ts` - Transaction-signature validation (Base58 → 64 bytes)
+  - `download.ts` - Client-side Blob downloads
   - `constants.ts` - Program IDs, network endpoints, sizes
   - `solana/networkCost.ts` - Network-authoritative cost calculation via RPC
   - `network.ts` - Network configuration and RPC factory
@@ -86,24 +95,27 @@
 
 Run `npm test` to execute Jest tests for content engine and memo utilities.
 
-**Test Results:** 44/44 tests passing
+**Test Results:** 193/193 tests passing across 15 suites
 
 ## Configuration
 
 - ESLint: Configured in `.eslintrc.json`
 - TypeScript: Compiles without errors
-- Jest: Jest 30.4.1 with 44 tests
+- Jest: Jest 30.4.1 with 193 tests
 
 ## Current Status
 
 ✅ Build successful
-✅ Tests passing (44/44)
+✅ Tests passing (193/193 across 15 suites)
 ✅ TypeScript compilation clean
 ✅ Memo Drop feature complete
 ✅ Wallet integration working
 ✅ Real platform fee (0.001 SOL) transferred on-chain to HashDrop fee wallet
 ✅ v1 SDK support available
 ✅ Solana Kit RPC migration complete
+✅ V3 PUBLIC / PROOF / PRIVATE publish + retrieval complete
+✅ PRIVATE publish exports the .hdp artifact + ML-KEM-768 key files client-side
+✅ Viewer retrieval verified against real Devnet and Mainnet v0 transactions
 ⚠️ v1 wallet support pending (Phantom)
 ⏳ Devnet deployment pending human approval
 

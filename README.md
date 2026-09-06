@@ -45,6 +45,9 @@ Users can publish small text and source-code assets without creating an account,
   - `memo.ts` - Memo Drop encoding/decoding
   - `transactions.ts` - Transaction builders
   - `verification.ts` - On-chain verification logic
+  - `crypto/` - PRIVATE mode cryptography (AES-256-GCM, ML-KEM-768, HKDF-SHA-256, key manager, encrypted artifact)
+  - `signature.ts` - Canonical Solana transaction-signature validation (Base58 → 64 bytes)
+  - `download.ts` - Client-side file downloads (Blob/object URL, no server)
   - `constants.ts` - Program IDs, network endpoints, sizes
   - `solana/networkCost.ts` - Network-authoritative cost calculation via RPC
   - `network.ts` - Network configuration and RPC factory
@@ -145,7 +148,10 @@ HashDrop/
 │   │   ├── rpc/          # RPC configuration
 │   │   │   ├── devnet.ts # Devnet RPC
 │   │   │   └── mainnet.ts # Mainnet RPC
-│   │   └── verification.ts # Verification utilities
+│   │   ├── verification.ts # Verification utilities
+│   │   ├── signature.ts    # Transaction-signature validation
+│   │   ├── download.ts     # Client-side Blob downloads
+│   │   └── crypto/         # PRIVATE mode crypto (aesGcm, mlKem, hkdf, keyManager, encryptedArtifact, keyWrapper, privateDrop)
 │   └── styles/      # Tailwind CSS
 └── docs/            # Documentation
 ```
@@ -178,7 +184,17 @@ Private mode uses hybrid encryption:
 On-chain size: ~255 bytes (fits within current 1232-byte Solana limit)
 Serialized transaction: 492 bytes (measured)
 
-The encrypted content artifact is user-controlled/off-chain.
+The encrypted content artifact is user-controlled/off-chain. After a
+successful PRIVATE publish the UI provides client-side downloads of the exact
+publish-time artifacts (no server involved):
+
+- `hashdrop-private-<hashDropId>.hdp` — the canonical `HASHDROP-PRIVATE-BLOB|v1|…` envelope
+- `hashdrop-mlkem-768-private-key-<keyFingerprint>.txt` — `HASHDROP-KEY|v1|ML-KEM-768|…`
+- `hashdrop-mlkem-768-public-key-<keyFingerprint>.txt` — `HASHDROP-PUBKEY|v1|ML-KEM-768|…`
+
+Both files are consumed directly by the Viewer (paste or file import) for
+DECRYPT & VERIFY. HashDrop stores neither file — losing them means losing the
+content.
 
 ## Testing
 
@@ -196,12 +212,15 @@ npm run test:coverage
 ## Current Status
 
 ✅ Build successful
-✅ Tests passing (44/44)
+✅ Tests passing (193/193 across 15 suites)
 ✅ Memo Drop feature complete
 ✅ Wallet integration working
 ✅ Real platform fee (0.001 SOL) transferred on-chain to HashDrop fee wallet
 ✅ v1 SDK support available
 ✅ Solana Kit RPC migration complete
+✅ V3 PUBLIC / PROOF / PRIVATE publish + retrieval complete
+✅ PRIVATE publish exports the .hdp artifact + ML-KEM-768 key files client-side
+✅ Viewer retrieval verified against real Devnet and Mainnet v0 transactions
 ⚠️ v1 wallet support pending (Phantom)
 ⏳ Devnet deployment pending human approval
 

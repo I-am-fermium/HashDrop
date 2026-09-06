@@ -125,3 +125,42 @@ The existing Publish system remains untouched as required.
    - Update transaction builder to use `compileToV1Message()`
    - Test v1 transactions on Devnet
    - Update UI to display v1 transaction info
+
+## V3 PRIVATE & Retrieval Hardening (2026-09-06)
+
+### Viewer (src/app/viewer/page.tsx)
+- V3 result UI: PUBLIC / PROOF / PRIVATE sections render after retrieval; the
+  PRIVATE commitment appears immediately (no decryption required first);
+  Encrypted Artifact + ML-KEM-768 Private Key inputs (paste and file import)
+  and the DECRYPT & VERIFY flow.
+- Error section renders whenever an error exists (validation errors were
+  previously hidden behind `status === 'FAILED'`).
+
+### PRIVATE publish exports (src/app/page.tsx, src/lib/download.ts)
+- After a successful PRIVATE publish: `hashdrop-private-<hashDropId>.hdp`,
+  `hashdrop-mlkem-768-private-key-<keyFingerprint>.txt`,
+  `hashdrop-mlkem-768-public-key-<keyFingerprint>.txt` — client-side Blob
+  downloads only; the secret key is never rendered, logged, or sent anywhere.
+- Accurate on-chain/off-chain copy replaces the outdated 4096-byte note.
+
+### Retrieval fixes (verified against REAL transactions)
+- v0 message shape: `verifyPrivateDrop`/`verifyProofDrop` now read
+  `message.instructions || message.compiledInstructions` and
+  `message.accountKeys || message.staticAccountKeys`. Regression tests in
+  `src/lib/verification.v0Shape.test.ts` replicate the exact Devnet v0
+  response (staticAccountKeys + compiledInstructions, Buffer data).
+- Live-verified real Devnet tx `4n8Uibg92Y…McCn` and real Mainnet tx
+  `RhpUZ6jSGf…381e`: both retrieve, the PRIVATE commitment UI appears, and
+  decode reaches the artifact-binding stage.
+- Signature validation: canonical Base58 → 64-byte rule (`src/lib/signature.ts`)
+  replaces the `length < 88` check that rejected the valid 87-char Mainnet
+  signature. Tests in `src/lib/signature.test.ts`.
+- `keyManager.validateKeyPair()` object-destructuring fix (previously always
+  returned false).
+
+### No changes to
+V3 protocol, payload/artifact/key formats, AES-256-GCM, ML-KEM-768, HKDF, AAD,
+IV handling, transaction construction, wallet architecture, fee logic.
+
+### Test results
+193/193 tests across 15 suites; `tsc --noEmit` clean; production build clean.

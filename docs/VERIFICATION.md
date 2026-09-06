@@ -64,6 +64,36 @@ The verification engine supports:
 - **v0 transactions**: Version 0
 - **v1 transactions**: Version 1 (ready)
 
+### RPC Message Shapes
+
+The memo-extraction step handles every shape `getTransaction()` returns:
+
+| Transaction version | Account keys | Instructions |
+|---------------------|--------------|--------------|
+| legacy (json)       | `message.accountKeys` | `message.instructions` |
+| v0 / v1 (json)      | `message.staticAccountKeys` | `message.compiledInstructions` |
+| jsonParsed          | `message.accountKeys` (parsed keys) | `message.instructions` |
+
+All retrieval paths (`verifyBySignature`, `verifyProofDrop`, `verifyPrivateDrop`) read
+`message.instructions || message.compiledInstructions` and
+`message.accountKeys || message.staticAccountKeys`, resolving program IDs via
+`programIdIndex` when needed. Real Devnet/Mainnet v0 responses carry ONLY
+`staticAccountKeys` + `compiledInstructions` (with Buffer instruction data).
+
+## Transaction Signature Validation (Viewer)
+
+The Viewer validates user-entered signatures canonically before retrieval
+(`src/lib/signature.ts`, `normalizeTransactionSignature()`):
+
+1. Trim the input (handles pasted whitespace/newlines)
+2. Base58 decode (rejects invalid characters: `0`, `O`, `I`, `l`, symbols)
+3. Require **exactly 64 decoded bytes** (`SIGNATURE_BYTE_LENGTH`)
+4. Use the normalized signature for RPC retrieval and Explorer links
+
+This is network-independent. Base58 of a 64-byte ed25519 signature is
+**87 or 88 characters** — a hard-coded textual length such as `length < 88`
+wrongly rejects valid Mainnet signatures.
+
 ## V3 PUBLIC Verification Process
 
 1. Fetch transaction from Solana by signature
@@ -95,7 +125,9 @@ If both match, the proof is VERIFIED.
 2. Find the SPL Memo Instruction in the transaction
 3. Decode the memo data
 4. Parse the V3 PRIVATE payload format
-5. Import the encrypted artifact (user-controlled/off-chain)
+5. Import the encrypted artifact (user-controlled/off-chain) — paste the canonical
+   `HASHDROP-PRIVATE-BLOB|v1|…` string or import the downloaded
+   `hashdrop-private-<hashDropId>.hdp` file (read locally as text; never uploaded)
 6. Verify artifact metadata matches transaction metadata:
    - hashDropId
    - sha256
@@ -104,7 +136,8 @@ If both match, the proof is VERIFIED.
    - cryptoVersion
    - keyFingerprint
 7. If metadata does not match: NOT VERIFIED ("Artifact does not belong to this HashDrop")
-8. Import the ML-KEM secret key
+8. Import the ML-KEM secret key — paste the `HASHDROP-KEY|v1|ML-KEM-768|…` envelope or
+   import the exported `hashdrop-mlkem-768-private-key-<keyFingerprint>.txt` file (read locally)
 9. Decapsulate ML-KEM ciphertext with secret key → shared secret
 10. Derive KEK via HKDF-SHA-256 from shared secret
 11. Reconstruct exact key-envelope AAD

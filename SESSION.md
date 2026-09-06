@@ -59,7 +59,8 @@ Phase 0 — Specification complete. Phase 1 (Static UI) complete. Phase 2 (Local
 ### Verification
 - Supports legacy, v0, and v1 transactions
 - Uses `maxSupportedTransactionVersion: 1` for retrieval
-- All 44 tests passing (44/44)
+- All 193 tests passing (193/193 across 15 suites)
+- Latest session: see `TASK_PROGRESS.md` → "V3 PRIVATE & Retrieval Hardening (2026-09-06)"
 
 ## Files Modified
 

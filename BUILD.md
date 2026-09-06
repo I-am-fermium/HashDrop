@@ -53,7 +53,7 @@ npx tsc --noEmit
 ## Current Build Status
 
 ✅ Build successful
-✅ Tests passing (44/44)
+✅ Tests passing (193/193 across 15 suites)
 ✅ TypeScript compilation clean
 ✅ ESLint passing (via eslint.config if configured; note: `npm run lint` currently requires Next 16 config)
 

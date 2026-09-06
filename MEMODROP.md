@@ -261,6 +261,16 @@ The verifier must verify that the memo came from the expected Memo program and i
 
 Do not treat arbitrary transaction log text as a valid HashDrop memo.
 
+Retrieval must handle every `getTransaction()` message shape:
+
+- legacy (json): `message.accountKeys` + `message.instructions`
+- v0/v1 (json): `message.staticAccountKeys` + `message.compiledInstructions`
+- jsonParsed: parsed keys + `message.instructions`
+
+Real Devnet and Mainnet v0 responses expose ONLY `staticAccountKeys` +
+`compiledInstructions`; reading `message.instructions` alone fails with
+misleading "no instructions" errors on genuine transactions.
+
 ---
 
 ## 14. Transaction Signature
@@ -278,6 +288,18 @@ Transaction: <signature>
 The signature is the primary on-chain locator for the Memo Drop.
 
 Do not require a backend database to remember it.
+
+User-entered signatures must be validated canonically before retrieval:
+
+1. trim input
+2. Base58 decode
+3. require exactly 64 decoded bytes
+4. reject invalid Base58 characters
+5. use the normalized (trimmed) signature for RPC retrieval
+
+Base58 of a 64-byte ed25519 signature is 87 or 88 characters — a hard-coded
+textual length (e.g. `< 88`) rejects valid Mainnet signatures. Validation is
+network-independent.
 
 ---
 
