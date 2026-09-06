@@ -235,4 +235,16 @@ npm run test:coverage
 
 ## License
 
-This project is open source and provided as-is for educational and development purposes.
+This project is licensed under the **HashDrop Source-Available Reciprocal License (HSRL-1.0)** — a source-available reciprocal license, **not** an open-source license. See [LICENSE](LICENSE).
+
+Key points:
+
+- Source code is publicly available for inspection, non-commercial use, education, academic research, and security auditing.
+- Modification is permitted for non-commercial purposes.
+- Distribution of derivatives requires reciprocal source availability (License, Sections 6–8).
+- **Commercial use requires a separate written license from HashDrop.**
+- HashDrop trademarks and branding are reserved.
+- Third-party dependencies and components remain governed by their own licenses.
+- The software is provided "AS IS", without warranty of any kind (License, Section 21).
+
+The HSRL-1.0 license text is a **draft for legal review** and has not been reviewed or endorsed by any legal organization.

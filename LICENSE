@@ -1,0 +1,461 @@
+# HASHDROP SOURCE-AVAILABLE RECIPROCAL LICENSE
+
+**Version 1.0 — Draft for Legal Review**
+
+**Short Name: HSRL-1.0**
+
+Copyright © 2026 HashDrop. All rights reserved.
+
+---
+
+**Status of this document.** This license is a **draft provided for professional legal review**. It has **not** been reviewed, approved, validated, certified, or endorsed by any lawyer, law firm, the Open Source Initiative (OSI), SPDX, or any other legal, standards, or certification body. No SPDX license identifier has been assigned to this license. **Professional legal review is strongly recommended before this license is relied upon for any commercial purpose.**
+
+**Source available is not open source.** HSRL-1.0 is a **source-available reciprocal license**. The public visibility of HashDrop's source code does **not** make HashDrop "open source" under any OSI definition or any other open-source definition, and no such claim is made. Rights in the Covered Software are granted only as expressly set out in this License. All other rights are reserved.
+
+---
+
+## Preamble
+
+HashDrop is a browser-native, decentralized publishing, verification, proof, and cryptographic-content system built on Solana. It includes, among other things, the HashDrop V3 protocol with PUBLIC, PROOF, and PRIVATE publication modes, on-chain publication through Solana transactions and SPL Memo instructions, SHA-256 content hashing and verification, cryptographic commitments, client-side cryptographic operations (including AES-256-GCM, ML-KEM-768, and HKDF-SHA-256), wallet-signed transactions, and encrypted private artifacts.
+
+This License makes the HashDrop source code available so that individuals and organizations may inspect it, learn from it, use it for non-commercial purposes, study and audit its security, and modify it for permitted purposes, while requiring that distributed derivatives of the Covered Software remain available under reciprocal terms and reserving all commercial exploitation for separate written authorization from the Licensor.
+
+Nothing in this License grants any rights in any third-party technology, including but not limited to Solana, the Solana protocol, SPL Memo, SHA-256, AES, AES-256-GCM, ML-KEM, ML-KEM-768, HKDF, other cryptographic standards, JavaScript, TypeScript, Next.js, React, browser APIs, wallet software, RPC infrastructure, or any third-party library, dependency, trademark, or intellectual property. This License governs only material that the Licensor is legally entitled to license.
+
+## 1. Definitions
+
+1.1 **"License"** means this HashDrop Source-Available Reciprocal License, Version 1.0 (HSRL-1.0), including its definitions and all numbered Sections.
+
+1.2 **"Licensor"** means HashDrop, the copyright holder identified in Section 38, including its successors-in-interest to the copyrights in the Covered Software.
+
+1.3 **"Covered Software"** means the HashDrop source code, build and configuration files, documentation, and associated materials made available by the Licensor under this License, including this LICENSE file itself. Covered Software does **not** include Third-Party Components (Section 16) or any other material the Licensor is not legally entitled to license.
+
+1.4 **"Modifications"** means any addition to, deletion from, or change to the contents of Covered Software, or any new file or work that contains or is derived from any part of Covered Software. Modifications include source code, build scripts, configuration changes, and documentation derived from Covered Software.
+
+1.5 **"Covered Derivative"** means a work that constitutes a derivative work or adaptation of Covered Software under applicable copyright law, including: (a) Covered Software as modified by Modifications; (b) a new work into which a substantial portion of Covered Software has been copied, adapted, or incorporated; and (c) a combined or collective work in which portions of Covered Software remain identifiable. A Covered Derivative does **not** include:
+
+(a) **Independent Code** (Section 1.6);
+
+(b) works that merely communicate with, interoperate with, link to, reference, load data from, or exchange data with Covered Software or a Covered Derivative through public APIs, file formats, network protocols, or blockchain transactions, without copying or deriving from the structure, organization, or expression of Covered Software;
+
+(c) separate works aggregated with Covered Software or a Covered Derivative on the same storage medium, repository, or distribution channel, where the separate works remain independent and separable ("mere aggregation"); or
+
+(d) Third-Party Components.
+
+1.6 **"Independent Code"** means software or other works that You author or own and that are not derived from Covered Software and are not Modifications, regardless of whether such code interoperates with, depends upon, communicates with, or is executed alongside Covered Software or a Covered Derivative.
+
+1.7 **"Source Code Form"** means the preferred form of the Covered Software or a Covered Derivative for making modifications, including all source files and the scripts, interfaces, configuration files, and build and deployment instructions reasonably necessary to build and, where applicable, deploy the software from that source.
+
+1.8 **"Object Code Form"** means any form of the Covered Software or a Covered Derivative other than Source Code Form, including compiled, bundled, minified, transpiled, or packaged forms.
+
+1.9 **"Distribute"** (and its noun form **"Distribution"**) means to make Covered Software or a Covered Derivative available to any third party in Source Code Form or Object Code Form, whether by transfer of copies, publication, hosting for download, or making available through any medium. Running software for Your own permitted internal purposes is not a Distribution.
+
+1.10 **"Network Service"** (or **"Hosted Service"**) means operating Covered Software or a Covered Derivative on a server, node, or other system so that third parties interact with it over a network without receiving a copy.
+
+1.11 **"Commercial Use"** has the meaning given in Section 4.
+
+1.12 **"You"** (or **"Recipient"**) means any individual or legal entity that exercises rights under this License.
+
+1.13 **"Administrative and Provisioning Data"** means configuration data, credentials, secrets, encryption keys, signing keys, private keys, API keys, connection strings, personal information, customer data, third-party confidential information, and similar operational or business data. None of these are ever required to be disclosed under this License.
+
+1.14 **"Official Release"** has the meaning given in Section 25.
+
+1.15 **"Third-Party Components"** has the meaning given in Section 16.
+
+1.16 **"Security Research"** has the meaning given in Section 17.
+
+## 2. Ownership
+
+2.1 The Licensor retains all right, title, and interest in and to the Covered Software, including all copyrights, and in and to the Official Releases and the HashDrop branding, except only those rights expressly granted in this License. No ownership of any kind is transferred to You.
+
+2.2 This License applies only to material that the Licensor is legally entitled to license. It does not apply to, and the Licensor does not claim ownership of, any third-party technology, standard, protocol, language, framework, runtime, or intellectual property, including but not limited to Solana, the Solana protocol, SPL Memo, SHA-256, AES, AES-256-GCM, ML-KEM, ML-KEM-768, HKDF, other cryptographic standards, JavaScript, TypeScript, Next.js, React, browser APIs, wallet software, RPC infrastructure, or any third-party library, dependency, service, or trademark.
+
+2.3 References in this License or in the Covered Software to HashDrop concepts (such as the HashDrop V3 protocol, PUBLIC mode, PROOF mode, PRIVATE mode, HashDrop IDs, or the encrypted private artifact formats) are descriptive of the HashDrop project. They confer no rights, and claim no rights, with respect to the underlying third-party standards, algorithms, protocols, or implementations on which those concepts rely.
+
+## 3. Limited License Grant
+
+3.1 Subject to Your full compliance with this License, the Licensor grants You a worldwide, royalty-free, non-exclusive, revocable (as provided in Section 20) copyright license to, for non-commercial purposes permitted by this License:
+
+(a) use, reproduce, run, execute, display, and internally test the Covered Software;
+
+(b) study, inspect, and analyze the Source Code Form of the Covered Software;
+
+(c) prepare Modifications of, and Covered Derivatives based on, the Covered Software for Your own permitted non-commercial purposes, including private development, education, academic research, experimentation, auditing, and Security Research; and
+
+(d) Distribute the Covered Software, unmodified or as part of a Covered Derivative, in Source Code Form or Object Code Form, solely for non-commercial purposes and strictly in compliance with Sections 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, and 19.
+
+3.2 The license in Section 3.1 is granted for lawful, non-commercial purposes only, including personal use, educational use, academic research, Security Research, auditing, experimentation, and private development. Commercial Use is addressed exclusively by Section 4.
+
+3.3 No rights are granted under this License in trademarks (Section 10), in patents except as expressly provided in Section 15, or in any material other than the Covered Software.
+
+## 4. Commercial Use and Commercial License
+
+4.1 **"Commercial Use"** means any use of the Covered Software or a Covered Derivative whose actual or primary purpose is commercial advantage, private financial gain, or monetary compensation, including:
+
+(a) selling, licensing, or otherwise making available the Covered Software or a Covered Derivative for a fee or other consideration;
+
+(b) using, incorporating, bundling, or embedding the Covered Software or a Covered Derivative in a product or service that is sold, licensed, monetized, or offered in connection with a revenue-generating activity;
+
+(c) offering functionality of the Covered Software or a Covered Derivative as a commercial software-as-a-service (SaaS) offering, paid hosted service, or paid API;
+
+(d) operating a monetized hosted derivative of the Covered Software;
+
+(e) commercial redistribution or commercial deployment of the Covered Software or a Covered Derivative; or
+
+(f) offering HashDrop functionality as a paid service in any form.
+
+4.2 The following are **not** Commercial Use for purposes of this License: ordinary personal, non-commercial use; educational and academic use, including use in courses and academic research at non-commercial institutions; non-commercial research, auditing, and Security Research conducted in accordance with Section 17; internal evaluation of the Covered Software; and charitable, humanitarian, or public-interest use that involves no charge and no monetization.
+
+4.3 Commercial Use of the Covered Software or any Covered Derivative requires a separate, express written commercial license from the Licensor, unless this License expressly states otherwise. Inquiries regarding commercial licensing may be directed to the License Contact identified in Section 36.
+
+4.4 This License does not itself grant any Commercial Use rights, and the absence of a prohibition in a given Section is not authorization for Commercial Use.
+
+4.5 Nothing in this Section limits the Licensor's right to grant or refuse commercial licenses at its sole discretion (Section 32).
+
+## 5. Modification
+
+5.1 You may modify the Covered Software for any purpose permitted by this License, and You may prepare Covered Derivatives for Your own permitted non-commercial use.
+
+5.2 You must not represent Modifications as unmodified Covered Software. To the extent reasonably practicable, files You modify must carry prominent notices, consistent with Section 12, stating that You changed them and the date of change.
+
+5.3 Modifications remain subject to this License. Removing or altering copyright, trademark, or license notices is prohibited under Section 11.
+
+## 6. Reciprocal Licensing Requirement
+
+6.1 If You Distribute a Covered Derivative, in Source Code Form or Object Code Form, You must make the Covered Derivative available to all recipients under this License, or under another reciprocal source-available license expressly authorized in writing by the Licensor (a **"Compatible Reciprocal Arrangement"**).
+
+6.2 The reciprocity obligation of Section 6.1 applies only to: (a) the Covered Software; and (b) Modifications. It does **not** apply to Independent Code, Third-Party Components, or Administrative and Provisioning Data, and it does not require the disclosure of any code or material that is not a Covered Derivative.
+
+6.3 For clarity: communicating with, interoperating with, calling into, being called by, exchanging data with, or being distributed alongside Covered Software or a Covered Derivative does **not** by itself make a work a Covered Derivative. Ordinary interoperability, integration through public interfaces, and mere aggregation do not trigger the reciprocity obligation for unrelated works.
+
+6.4 If You Distribute a Covered Derivative in Object Code Form, You must provide the corresponding Source Code Form as required by Section 7.
+
+6.5 Because Distribution under this License is limited to non-commercial purposes, You must not condition receipt of a Covered Derivative on payment of a fee or other consideration; doing so constitutes Commercial Use subject to Section 4.
+
+## 7. Source Code Requirements
+
+7.1 Whenever this License requires Source Code Form to be made available, that source must be: (a) in the preferred form for making Modifications; (b) complete and corresponding to the exact Object Code Form Distributed or to the exact version operated as a Network Service; (c) in a machine-readable, non-proprietary format; and (d) accompanied by the build and deployment instructions reasonably necessary to produce the Object Code Form You Distributed or the functionality You operated.
+
+7.2 Source Code Form may be made available: (a) together with the Distribution; (b) through a durable, publicly accessible network location identified with the Distribution; or (c) for Distribution on physical media, through a written offer valid for at least three (3) years.
+
+7.3 Source Code Form made available under Sections 6, 7, or 8 must remain available for as long as You Distribute or operate the corresponding Covered Derivative, and in any event for at least three (3) years after Your last Distribution or operation of that version.
+
+7.4 Making Source Code Form available under this Section does not require You to provide support, warranty, indemnity, or service levels for the Covered Derivative.
+
+## 8. Network and Hosted Service Reciprocity
+
+8.1 If You operate a Covered Derivative as a Network Service, You must make the Source Code Form of the Covered Software and of Your Modifications as used to operate that service reasonably available to the users of that service, under this License, at no charge beyond the cost of reproduction or network access, for as long as the service is operated. Availability may be satisfied through a prominent download location or a written offer delivered through the service.
+
+8.2 The obligation in Section 8.1 covers the Covered Software and the Modifications used to provide the Network Service. It does **not** require You to disclose or make available:
+
+(a) Independent Code;
+
+(b) unrelated infrastructure, unrelated databases, unrelated proprietary systems, or unrelated internal tooling, including systems that merely host, deploy, monitor, or serve the Covered Derivative;
+
+(c) Administrative and Provisioning Data, including private credentials, secrets, encryption keys, signing keys, API keys, and connection strings;
+
+(d) customer data, personal information, or user content processed by the service; or
+
+(e) third-party confidential information or Third-Party Components governed by their own licenses.
+
+8.3 Operating **unmodified** Covered Software as a Network Service triggers the reciprocity obligation only with respect to Modifications, of which there are none in that case; any Commercial Use of such a service remains subject to Section 4.
+
+8.4 The purpose of this Section is reciprocal availability of covered HashDrop-derived software. It is not intended to force disclosure of unrelated business infrastructure, and it must be interpreted accordingly.
+
+## 9. Forks and Derivative Versions
+
+9.1 You may create and, for permitted non-commercial purposes, Distribute forks and derivative versions of the Covered Software, subject to Sections 6, 7, 8, and 10 through 14.
+
+9.2 A fork or derivative version must be clearly and prominently identified as a derivative work. It must not be presented, named, or described in any way reasonably likely to cause confusion as to whether it is an Official Release, or is endorsed by, operated by, affiliated with, or maintained by HashDrop (Sections 10, 25, and 26).
+
+9.3 A fork or derivative version should, where reasonably practicable: (a) use a name and branding distinguishable from HashDrop; (b) state that it is based on HashDrop and reference the original project; and (c) comply with Section 12 (modification history and attribution).
+
+## 10. Trademarks and Branding
+
+10.1 This License grants no license or right, express or implied, in or to any trademark, service mark, trade name, logo, domain name, or other brand identifier of HashDrop (the **"HashDrop Marks"**). All goodwill arising from any permitted use of HashDrop Marks inures solely to the Licensor.
+
+10.2 Copyright permission under this License is distinct from trademark permission. The right to copy, modify, and redistribute code does **not** include the right to use HashDrop Marks.
+
+10.3 You must not: (a) use a HashDrop Mark as the name of, or in the branding of, a fork or derivative version; (b) imply endorsement, affiliation, sponsorship, or official status (Section 25); (c) represent a fork or derivative version as an official HashDrop release; or (d) use HashDrop Marks in any misleading or confusing manner.
+
+10.4 Factual, nominative references to HashDrop — for example, "compatible with HashDrop", "based on HashDrop", "a fork of HashDrop", or accurate technical references to the HashDrop V3 protocol — are permitted to the extent such fair, accurate references are lawful, provided they do not suggest endorsement or official status.
+
+10.5 Nothing in this Section claims ownership of generic blockchain, cryptography, or software terminology.
+
+## 11. Copyright and Legal Notices
+
+11.1 You must not remove, alter, or obscure any copyright, trademark, attribution, or license notice contained in the Covered Software.
+
+11.2 All copies of the Covered Software or a Covered Derivative that You Distribute must retain, to the extent reasonably practicable, the notices present in the Covered Software and must include a copy of this License or a conspicuous reference to it.
+
+11.3 Where retained notices reference third-party materials, those notices must be preserved (Section 16).
+
+## 12. Modification History and Attribution
+
+12.1 When You Distribute, or operate as a Network Service, a Covered Derivative containing Modifications, You must maintain and make reasonably available, together with the Source Code Form, a modification history (for example, a change log or version-control history) that identifies, for each Modification, a reasonable description of the change and its date.
+
+12.2 Attribution requirements under this License are limited to what is reasonably necessary to preserve the origin of the Covered Software. You are **not** required to provide attribution in advertising, promotional materials, or in every modified file beyond the notice requirements of Sections 5.2 and 11.
+
+12.3 You must not represent Modifications as original, unmodified Covered Software, and You must not remove statements that identify the Covered Software's origin.
+
+## 13. Security Fixes
+
+13.1 You may make Modifications to address security vulnerabilities ("Security Fixes"), including emergency Security Fixes, for any purpose permitted by this License, without delay.
+
+13.2 Security Fixes are Modifications for all purposes of this License. Source availability for Security Fixes is governed by Sections 6, 7, and 8. Describing a change as a security fix does **not** exempt it from the reciprocal licensing requirement, and systematic use of the "security fix" label cannot convert Covered Software or a Covered Derivative into a non-reciprocal derivative.
+
+13.3 If the Licensor publishes an Official Release incorporating a Security Fix, You are encouraged, but not required, to align Your derivative version with that Official Release.
+
+## 14. DRM, Obfuscation, and Technical Restrictions
+
+14.1 You may not Distribute Covered Software or a Covered Derivative, or operate one as a Network Service, while applying technical measures — including digital rights management (DRM), access controls, license-verification mechanisms, or deliberate obfuscation — that prevent, restrict, or deter recipients or users from exercising the rights granted to them under this License, including the right to obtain and inspect the Source Code Form, to make Modifications, and to make permitted non-commercial use.
+
+14.2 Distributing Object Code Form with compilation, bundling, minification, or packaging applied for ordinary engineering reasons is permitted, provided the corresponding Source Code Form is made available as required by this License and Section 14.1 is respected.
+
+14.3 Nothing in this Section prohibits genuine security hardening, provided that such hardening does not defeat the license rights of recipients.
+
+14.4 To the extent applicable law grants recipients the right to circumvent technical protection measures for interoperability, security research, or lawful modification, that right is preserved and is not waived by this License.
+
+## 15. Patent License
+
+15.1 Subject to Your compliance with this License, the Licensor grants You a worldwide, royalty-free, non-exclusive, non-sublicensable, non-transferable patent license, to the extent the Licensor owns or controls patent claims that are necessarily infringed by the Covered Software as made available by the Licensor, to make, have made, use, and otherwise practice the Covered Software for the purposes permitted by this License.
+
+15.2 The patent license in Section 15.1 does not extend to: (a) Modifications or Covered Derivatives as such; (b) any third-party technology, including Solana, SPL Memo, SHA-256, AES, AES-256-GCM, ML-KEM, ML-KEM-768, HKDF, or any other standard, algorithm, protocol, or third-party patent; or (c) Your Independent Code.
+
+15.3 If You, or any person acting on Your behalf, institute patent litigation against the Licensor or any recipient of Covered Software alleging that the Covered Software, a Covered Derivative, or any other software infringes a patent, the patent license granted to You under Section 15.1 terminates as of the date such litigation is filed. Defending against patent litigation, settling it, or filing a counterclaim does not constitute instituting patent litigation for purposes of this Section.
+
+15.4 No patent license is granted for claims that are infringed only by combining the Covered Software with other software or hardware, or for uses outside the purposes permitted by this License.
+
+## 16. Third-Party Components
+
+16.1 The Covered Software may include or depend upon software and materials provided by third parties ("Third-Party Components"), including dependencies identified in the project's package manifests and lock files, embedded third-party scripts, and any third-party code contained in the repository.
+
+16.2 Third-Party Components are **not** licensed under this License. They remain governed by their own applicable licenses, copyright notices, and terms. Nothing in this License relicenses, modifies, or limits any third-party license, and nothing in this License grants rights in third-party intellectual property.
+
+16.3 Where the Covered Software embeds third-party code, the embedded code retains its own notices and license. For example, the third-party script `install-solana.sh` bears its own copyright and license notice of its original authors and is not licensed under this License.
+
+16.4 If any Third-Party Component requires license terms that are incompatible with this License, the third-party terms govern that component, and the reciprocity obligations of this License do not override them.
+
+## 17. Security Research and Auditing
+
+17.1 **"Security Research"** means: penetration testing; cryptographic and protocol analysis; vulnerability discovery, analysis, and verification; security auditing and code review; reverse engineering of the Covered Software for security research purposes where legally permitted; reproduction and testing of reported vulnerabilities; and related academic research.
+
+17.2 This License must not be interpreted as prohibiting the Security Research activities described in Section 17.1, subject always to applicable law and to the rights of others.
+
+17.3 Security Research is encouraged to be conducted under responsible-disclosure norms, reporting findings to the security contact designated by the Licensor in the project's security documentation where one exists, rather than to the License Contact identified in Section 36.
+
+17.4 This Section permits research on the Covered Software. It does not authorize unauthorized access to third-party systems, wallets, accounts, or data, and does not authorize unlawful activity of any kind.
+
+## 18. Privacy and Telemetry
+
+18.1 This License imposes no telemetry, analytics, phone-home, usage-reporting, registration, or personal-information-collection requirement on anyone. Nothing in this License requires HashDrop or any recipient to collect, transmit, or report usage data, and nothing requires users of the Covered Software to register installations or submit personal information.
+
+18.2 The Covered Software is designed to operate client-side in the browser without centralized storage or collection. This License does not change that design and does not require the Licensor to add telemetry, backend services, or registration mechanisms.
+
+18.3 If a recipient adds telemetry, analytics, or other data collection to a Covered Derivative, that recipient is solely responsible for complying with all applicable privacy and data-protection laws and for providing any required notices and obtaining any required consents. Such additions are Modifications subject to Sections 6 through 8.
+
+## 19. Compliance with Law
+
+19.1 You must use the Covered Software only in compliance with all applicable laws and regulations, including those relating to export control, economic sanctions, cryptography import and export, privacy and data protection, consumer protection, and content regulation.
+
+19.2 This License does not authorize any use that is unlawful under applicable law, and does not constitute legal advice regarding the legality of any particular use, deployment, or jurisdiction.
+
+19.3 You are solely responsible for Your use of the Solana network, wallets, RPC providers, and cryptographic functionality, and for determining whether that use is lawful in Your jurisdiction.
+
+## 20. Termination
+
+20.1 Your rights under this License terminate automatically if You materially breach this License and fail to cure the breach within thirty (30) days after receiving written notice of the breach that describes it with reasonable specificity. Written notice may be given by the Licensor or by a person authorized to act on the Licensor's behalf.
+
+20.2 If You cure the breach within the period stated in Section 20.1, Your rights under this License are reinstated. If You materially breach this License again after such reinstatement, Your rights terminate automatically and permanently upon notice and may be reinstated only in a writing signed by the Licensor.
+
+20.3 The patent license granted under Section 15 terminates as set out in Section 15.3. That termination is separate from, and in addition to, any termination under this Section.
+
+20.4 Termination of Your rights does not affect the rights of persons who received Covered Software or Covered Derivatives from You in compliance with this License prior to the circumstances giving rise to termination; such persons retain the rights this License grants them, provided they remain in compliance. Persons who received copies that were not Distributed in compliance with this License receive no rights under this License.
+
+20.5 The following Sections survive any termination of Your rights: 2, 4, 10, 11, 15.3, 16, 21, 22, 23, 26, 27, 28, 29, 30, 33, 34, 36, 37, and 38.
+
+20.6 Termination is not an exclusive remedy. The Licensor reserves all other remedies available at law or in equity.
+
+## 21. No Warranty
+
+21.1 THE COVERED SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING ANY WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, ACCURACY, AVAILABILITY, SECURITY, RELIABILITY, OR UNINTERRUPTED OR ERROR-FREE OPERATION, TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW.
+
+21.2 **Blockchain and cryptographic disclaimer.** To the fullest extent permitted by applicable law, the Licensor makes no guarantee or warranty of any kind regarding: (a) blockchain permanence; (b) transaction confirmation, availability, inclusion, finality, or ordering; (c) RPC availability or correctness; (d) wallet availability or behavior; (e) Solana network availability, performance, or continued operation; (f) cryptographic security beyond the stated implementation as provided; (g) future compatibility of protocols, clients, wallets, or networks; (h) the availability of any third-party service; (i) recovery of lost keys, lost encrypted artifacts, or lost encryption material; (j) successful decryption of any encrypted artifact if required keys have been lost or are unavailable; (k) uninterrupted operation; (l) censorship resistance; or (m) any economic value, including any token or cryptocurrency value.
+
+21.3 **User responsibility.** You are solely responsible for Your wallet, Your private keys (including any Solana wallet keys and any ML-KEM private keys), Your encrypted artifacts, Your backups, transaction fees, network usage, and compliance with applicable law. The Licensor does not control the Solana network, third-party wallets, RPC providers, or any other third-party infrastructure, and is not responsible for their acts, omissions, availability, or changes.
+
+21.4 **PRIVATE mode.** HashDrop PRIVATE mode relies on client-side cryptographic operations, including hybrid encryption using AES-256-GCM, ML-KEM-768, and HKDF-SHA-256, and produces encrypted private artifacts. HashDrop does not inherently possess the user's private decryption key and cannot recover lost ML-KEM private keys, lost encrypted artifacts, lost encryption material, or content encrypted with them. Loss of keys or artifacts may be permanent and unrecoverable.
+
+21.5 No oral or written information or advice given by the Licensor creates a warranty.
+
+## 22. Limitation of Liability
+
+22.1 TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT WILL THE LICENSOR BE LIABLE TO YOU OR ANY THIRD PARTY FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES (INCLUDING LOST PROFITS, LOST DATA, LOSS OF KEYS OR ENCRYPTED ARTIFACTS, LOSS OF FUNDS OR DIGITAL ASSETS, BUSINESS INTERRUPTION, OR LOSS OF GOODWILL), HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE), EVEN IF THE LICENSOR HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+22.2 TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, THE LICENSOR'S AGGREGATE LIABILITY ARISING OUT OF OR RELATING TO THE COVERED SOFTWARE OR THIS LICENSE WILL NOT EXCEED THE GREATER OF (A) THE AMOUNTS YOU ACTUALLY PAID TO THE LICENSOR FOR THE COVERED SOFTWARE IN THE TWELVE (12) MONTHS PRECEDING THE EVENT GIVING RISE TO THE CLAIM, OR (B) ONE HUNDRED U.S. DOLLARS (US $100).
+
+22.3 Nothing in this License excludes or limits liability that cannot be excluded or limited under applicable law, including liability for death or personal injury caused by negligence, for fraud or fraudulent misrepresentation, or any other statutory liability that cannot lawfully be excluded.
+
+22.4 The disclaimers and limitations in this Section apply regardless of the form of action and survive the failure of the essential purpose of any limited remedy.
+
+## 23. Indemnification
+
+23.1 To the extent permitted by applicable law, You will defend, indemnify, and hold harmless the Licensor, and its affiliates and their respective officers, directors, employees, and agents, from and against any third-party claims, demands, actions, and proceedings, and the associated losses, damages, liabilities, costs, and expenses (including reasonable legal fees), arising out of or relating to: (a) Your Distribution of, or Network Service operation of, Covered Software or a Covered Derivative; (b) Your Modifications; (c) Your breach of this License; or (d) Your infringement or misappropriation of any third-party right, including third-party intellectual property or trademark rights, in connection with Your use of the Covered Software.
+
+23.2 The Licensor will provide, where reasonably practicable, prompt written notice of any claim subject to indemnification under Section 23.1, reasonable cooperation at Your expense, and control of the defense and settlement, provided that You may not settle any claim in a manner that imposes obligations on, or admits fault of, the Licensor without the Licensor's prior written consent.
+
+23.3 This Section does not require indemnification for claims arising from the Licensor's own gross negligence, willful misconduct, or breach of this License, and is subject to all limits imposed by applicable law.
+
+## 24. No Support Obligation
+
+24.1 This License creates no obligation on the Licensor to provide support, maintenance, updates, patches, bug fixes, security fixes, documentation, training, hosting, RPC services, wallet services, transaction services, compatibility guarantees, service levels, or any other services for the Covered Software.
+
+24.2 The Licensor may, at its sole discretion, publish updates or Official Releases. There is no obligation to continue development, to maintain compatibility with any network, wallet, or environment, or to support any particular version of the Covered Software.
+
+## 25. Official Releases
+
+25.1 An **"Official Release"** means a version of the Covered Software published by the Licensor, or published by another party with the Licensor's express written authorization and identified by the Licensor as official.
+
+25.2 Only the Licensor may designate an Official Release. No other person or entity may designate any software as an Official Release.
+
+25.3 A fork, derivative version, modified build, or redeployment must not falsely represent itself as an Official Release, or as endorsed by, operated by, maintained by, or affiliated with HashDrop, unless expressly authorized in writing by the Licensor.
+
+## 26. No Endorsement
+
+26.1 The name "HashDrop", the HashDrop Marks (Section 10), and the names of the Licensor's personnel must not be used to endorse or promote derivative products or services without the Licensor's prior written permission, beyond the factual, nominative references permitted by Section 10.4.
+
+26.2 Nothing in this License creates a partnership, joint venture, agency, franchise, or employment relationship between the Licensor and any recipient.
+
+26.3 Use of the Covered Software does not signify that the Licensor endorses You or Your use.
+
+## 27. Assignment
+
+27.1 You may not assign or transfer this License or the rights granted under it, except: (a) as an inherent consequence of a permitted Distribution of a Covered Derivative under Section 6, whereby each recipient receives rights directly from the Licensor under this License upon compliance with its terms; or (b) with the Licensor's prior written consent.
+
+27.2 Any purported assignment in violation of this Section is void.
+
+27.3 The Licensor may assign or transfer this License and its rights in the Covered Software without restriction.
+
+## 28. Severability
+
+28.1 If any provision of this License is held invalid, illegal, or unenforceable by a court or tribunal of competent jurisdiction, that provision will be enforced to the maximum extent permissible or, if necessary, severed or reformed to the minimum extent necessary to make it enforceable while most closely reflecting its original intent, and the remaining provisions will remain in full force and effect.
+
+28.2 This License will not be rendered unenforceable as a whole merely because a single provision or a particular application of a provision is unenforceable in a particular jurisdiction.
+
+## 29. No Waiver
+
+29.1 The Licensor's failure or delay to enforce any provision of this License is not a waiver of that provision, of any other provision, or of the right to enforce it later.
+
+29.2 Any waiver must be express and in writing signed by the Licensor, and applies only to the specific instance and purpose for which it is given.
+
+## 30. Entire Agreement
+
+30.1 This License is the entire agreement between You and the Licensor concerning the Covered Software, and it supersedes any prior or contemporaneous understandings or communications, whether electronic, oral, or written, concerning the Covered Software.
+
+30.2 This License does not supersede, modify, or limit the licenses of Third-Party Components (Section 16), which remain governed by their own terms.
+
+30.3 If You and the Licensor have signed a separate written agreement (for example, a commercial license under Section 4 or a Compatible Reciprocal Arrangement under Section 6.1) covering the Covered Software or any part of it, that agreement governs with respect to its subject matter between You and the Licensor, and this License continues to govern everything else.
+
+## 31. Changes to this License
+
+31.1 The Licensor may publish new versions of this License (for example, HSRL-1.1 or HSRL-2.0) from time to time.
+
+31.2 Covered Software received under HSRL-1.0 remains governed by HSRL-1.0 unless You affirmatively agree to a later version. Receipt of the Covered Software, or its continued use, does not by itself constitute consent to a later version.
+
+31.3 The Licensor may designate a particular release of the Covered Software as available under "HSRL-1.0 or any later version". Where the Covered Software, a specific file, or a release carries such a designation, You may choose to receive that material under HSRL-1.0 or under any later version of this License published by the Licensor.
+
+31.4 A Covered Derivative Distributed by You under HSRL-1.0 must remain available under HSRL-1.0 (or a Compatible Reciprocal Arrangement) for the period required by Section 7.3. Any election by You under Section 31.3 applies prospectively, to releases You make after that election, and does not withdraw rights already granted.
+
+## 32. Dual Licensing
+
+32.1 Nothing in this License restricts the Licensor from licensing, selling, or making available the Covered Software, or any portion of it, to any person or entity under different terms — including commercial licenses, other source-available licenses, or open-source licenses — at the Licensor's sole discretion.
+
+32.2 The Licensor may engage in dual licensing, offering the same code under this License and under other agreements simultaneously. Your rights under this License are not affected by the existence of other license agreements between the Licensor and third parties.
+
+32.3 No course of dealing, no publication of the Covered Software under this License, and no delay in enforcing this License limits the Licensor's right to grant other licenses (see Section 29).
+
+## 33. Reserved Rights
+
+33.1 All rights not expressly granted by this License are reserved to the Licensor, including:
+
+(a) all trademark, service mark, trade name, logo, and branding rights (Section 10);
+
+(b) all patent rights other than the express patent license in Section 15;
+
+(c) all rights in Administrative and Provisioning Data, confidential information, and internal business information of the Licensor;
+
+(d) all rights in Third-Party Components, which belong to their respective owners, and in any material the Licensor is not entitled to license;
+
+(e) moral rights, publicity rights, and privacy rights, to the extent recognized by applicable law and not legally waived; and
+
+(f) the exclusive right to make Commercial Use (Section 4) absent a separate written commercial license.
+
+33.2 No implied licenses arise from this License, from the publication of the Covered Software, or from any course of conduct.
+
+## 34. Interpretation
+
+34.1 Headings are for convenience only and do not affect interpretation.
+
+34.2 "Including", "includes", "such as", and "for example" mean "including without limitation". "Or" is not exclusive. The singular includes the plural, and the plural includes the singular.
+
+34.3 This License is a source-available, reciprocal license. It must be interpreted to give effect to its purpose: permitting inspection, study, non-commercial use, education, research, and Security Research, while requiring reciprocal source availability for Covered Derivatives that are Distributed or operated as Network Services, restricting Commercial Use to separately licensed arrangements, and protecting the HashDrop Marks and the Licensor's ownership.
+
+34.4 The reciprocity and disclosure obligations of this License extend only as far as necessary to keep the Covered Software and Modifications available on reciprocal terms. They do not extend to Independent Code, unrelated systems, or Third-Party Components, and must not be interpreted to convert unrelated or interoperating software into a Covered Derivative.
+
+34.5 References to "applicable law" preserve any mandatory provisions of law that cannot be waived or limited by contract, and this License must be read subject to them.
+
+34.6 If this Section or the summary in Section 37 appears to conflict with any other provision, the definitions and operative Sections control.
+
+## 35. Notices
+
+35.1 When You Distribute Covered Software or a Covered Derivative, You must: (a) retain all notices required by Section 11; (b) include a copy of this License or a conspicuous link or reference to it; (c) state significant Modifications as required by Sections 5.2 and 12; and (d) not remove or obscure the attribution that identifies HashDrop as the origin of the Covered Software.
+
+35.2 When You operate a Covered Derivative as a Network Service, You must provide the notices and source availability required by Section 8 in a manner reasonably conspicuous to users of the service.
+
+35.3 Notices must be in a form reasonably accessible to recipients, for example in the repository, the distribution archive, the documentation, or the service interface.
+
+## 36. License Contact
+
+36.1 License Contact: HashDrop
+
+36.2 The License Contact is the channel designated for inquiries concerning: commercial licensing (Section 4); Compatible Reciprocal Arrangements (Section 6.1); trademark permissions (Section 10); and interpretation of this License.
+
+36.3 This License intentionally uses a neutral contact designation and does not publish an email address or any other contact detail. Where the Licensor publishes official contact details for licensing inquiries, those published details govern.
+
+## 37. Summary of Key Restrictions
+
+37.1 **This Section is a non-normative summary provided for convenience only.** If this summary conflicts with any other Section of this License, the other Sections control.
+
+37.2 In plain terms, the key restrictions and requirements of this License are:
+
+(a) **Not open source.** This is a source-available license. Public visibility of the code is not a grant of open-source rights.
+
+(b) **Non-commercial use only**, absent a separate written commercial license. Commercial Use (Section 4) requires the Licensor's separate written authorization.
+
+(c) **Reciprocity.** If You Distribute a Covered Derivative, its Covered Software portions and Modifications must remain available in Source Code Form under this License or a Compatible Reciprocal Arrangement (Sections 6 and 7).
+
+(d) **Hosted services.** If You operate a modified Covered Derivative as a Network Service, the source of the Covered Software and Modifications must be reasonably available to users of the service (Section 8) — but unrelated infrastructure, secrets, keys, personal data, and third-party confidential information are never required to be disclosed.
+
+(e) **Notices, attribution, and modification history** must be preserved (Sections 11 and 12).
+
+(f) **No technical restrictions** designed to defeat recipients' license rights (Section 14).
+
+(g) **No trademark rights.** HashDrop Marks are not licensed, and forks must not present themselves as official (Sections 10 and 25).
+
+(h) **Security research is permitted** (Section 17), subject to applicable law.
+
+(i) **No telemetry is required** (Section 18).
+
+(j) **No warranty and limited liability** (Sections 21 and 22); blockchain and cryptographic outcomes, key recovery, and encrypted-artifact recovery are not guaranteed (Section 21).
+
+(k) **Violation terminates rights**, subject to cure and reinstatement (Section 20).
+
+(l) **Dual licensing is reserved** to the Licensor (Section 32), and all rights not granted are reserved (Section 33).
+
+## 38. Copyright Notice
+
+38.1 Copyright © 2026 HashDrop. All rights reserved.
+
+38.2 This License is Version 1.0 of the HashDrop Source-Available Reciprocal License (HSRL-1.0), **Draft for Legal Review**. It has not been reviewed, approved, or endorsed by any lawyer, law firm, or legal or standards organization, and no SPDX identifier has been assigned to it. Professional legal review is recommended before relying on this License, particularly for commercial purposes.
+
+38.3 Inquiries regarding this License should be directed to the License Contact identified in Section 36.
