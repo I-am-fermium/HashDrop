@@ -39,12 +39,13 @@
 - [x] SPL Memo program integration
 - [x] V2 memo payload format
 - [x] Transaction building (v0 format)
+- [x] Platform fee transfer (0.001 SOL → HashDrop fee wallet via `SystemProgram.transfer`)
 - [x] Dynamic size validation
 - [x] Transaction version detection
 
 ## Phase 5 — Testing & Verification ✅ COMPLETE
 
-- [x] Unit tests (30/30 passing)
+- [x] Unit tests (44/44 passing)
 - [x] Program tests (stubbed)
 - [x] Client tests
 - [x] End-to-end devnet testing (pending human approval)

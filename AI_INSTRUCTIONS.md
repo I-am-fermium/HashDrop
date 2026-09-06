@@ -62,6 +62,7 @@ Stop and ask for human review when:
 
 **Phase 5 Complete**: Memo Drop implementation finished
 **Status**: Testing & Verification complete
-**Tests**: 30/30 passing
+**Platform Fee**: Real on-chain `SystemProgram.transfer` (0.001 SOL → `HASHDROP_FEE_WALLET`) included in every publish transaction
+**Tests**: 44/44 passing
 **Build**: Successful
 **Next**: Devnet deployment (human required)

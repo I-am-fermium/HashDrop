@@ -5,25 +5,17 @@ All notable project changes are recorded here.
 ## Unreleased
 
 ### Added
-- Solana v1 transaction support infrastructure (SDK detection, capability checking)
-- Dynamic transaction size validation based on actual serialization
-- v1 transaction retrieval support (maxSupportedTransactionVersion: 1)
-- RPC factory pattern with `createRpc()` and `createConnection()` functions
-- Network-specific RPC configuration in `src/lib/rpc/`
-- Solana Kit as primary RPC layer for all RPC operations
+- **Real HashDrop platform-fee transfer**: publish transactions now include a `SystemProgram.transfer` instruction that sends 0.001 SOL (1,000,000 lamports) from the user's wallet to the HashDrop fee wallet (`Amy4Tej83vsnCdFbBtfWmQrEdRLVF4AVAvZupyka8qQT`).
+- Shared platform-fee constants in `src/lib/constants.ts`: `HASHDROP_PLATFORM_FEE_LAMPORTS`, `HASHDROP_PLATFORM_FEE_SOL`, `HASHDROP_FEE_WALLET` (single source of truth; old `PROTOCOL_FEE` placeholder removed).
+- Transaction-builder test suite `src/lib/transactions.test.ts` verifying the fee transfer, memo instruction, v0 version, single signer, and absence of ComputeBudget priority fees.
+- Production favicon `src/app/icon.svg` — red "H" on a dark rounded square, served automatically via the App Router file-based icon convention.
 
 ### Changed
-- Transaction building now uses v0 format due to Phantom wallet v1 signing limitations
-- Transaction size validation uses actual serialized size, not content length
-- UI displays transaction version and available bytes dynamically
-- `getLatestBlockhash()` now uses Solana Kit RPC instead of web3.js Connection
-- Mainnet RPC configuration now requires `NEXT_PUBLIC_SOLANA_MAINNET_RPC` to be set
-- Network state initialization fixed to prevent hydration mismatch
+- `buildV1Transaction()` in `src/lib/transactions.ts` now packages the platform-fee transfer as the **first** instruction, followed by the SPL Memo instruction. Transaction still compiles via `compileToV0Message()` (v0).
+- `CostSummary.tsx` and `useCostEstimate.ts` now derive the displayed platform fee from the shared `HASHDROP_PLATFORM_FEE_*` constants.
 
 ### Fixed
-- Mainnet RPC 403 error - now requires explicit RPC configuration
-- Hydration mismatch in network state - initializes to 'devnet' for SSR compatibility
-- RPC layer now properly separated from wallet signing layer
+- Confirmation-modal cost double-counting: `getDisplayCost()` in `src/app/page.tsx` no longer adds the base network fee a second time (estimated total is now 0.001005 SOL instead of 0.001010 SOL).
 
 ## Phase 0 - Foundation (2026-08-12)
 
@@ -131,9 +123,11 @@ All notable project changes are recorded here.
 ## Current Status
 
 ✅ Build successful
-✅ Tests passing (30/30)
+✅ Tests passing (44/44)
 ✅ Memo Drop feature complete
 ✅ Wallet integration working
+✅ Real platform fee (0.001 SOL) transferred on-chain to HashDrop fee wallet
+✅ Production favicon (src/app/icon.svg)
 ✅ v1 SDK support available
 ✅ Solana Kit RPC migration complete
 ⚠️ v1 wallet support pending (Phantom)

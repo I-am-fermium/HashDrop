@@ -19,9 +19,9 @@ The application uses a hybrid Solana architecture:
 
 HashDrop displays the following costs:
 
-### HashDrop Protocol Fee
+### HashDrop Platform Fee
 
-A fee paid to the HashDrop treasury according to the published protocol policy.
+A real on-chain SOL transfer of 0.001 SOL (1,000,000 lamports) from the user's wallet to the HashDrop fee wallet (`Amy4Tej83vsnCdFbBtfWmQrEdRLVF4AVAvZupyka8qQT`), included in every publish transaction via a `SystemProgram.transfer` instruction.
 
 ### Solana Network Fee
 
@@ -38,7 +38,7 @@ The browser must calculate or obtain enough information to show:
 
 ## Accuracy
 
-The implementation uses network-authoritative pricing from Solana RPC for fee estimation.
+The platform-fee portion is exact by construction (it matches the `SystemProgram.transfer` lamport amount). The Solana network fee is currently a hardcoded estimate (5000 lamports via `getBaseTransactionFee()`); `getFeeForMessage` is not currently used.
 
 ## Fee Policy
 
@@ -57,40 +57,65 @@ Errors caused by changed network conditions should be explained rather than sile
 For Memo Drop publications:
 
 ```text
-HashDrop Protocol Fee
+HashDrop Platform Fee (SystemProgram.transfer, 0.001 SOL)
 +
 Solana Network Fee
 ```
 
 No storage funding is required for Memo Drop publications.
 
+The HashDrop platform fee is a **real on-chain SOL transfer** included in every publish transaction: the user's wallet sends 1,000,000 lamports (0.001 SOL) to the HashDrop fee wallet via a `SystemProgram.transfer` instruction. It is not a display-only charge.
+
+## Fee Configuration
+
+The platform fee is defined once in `src/lib/constants.ts` (single source of truth):
+
+```typescript
+export const HASHDROP_PLATFORM_FEE_LAMPORTS = 1_000_000; // 0.001 SOL
+export const HASHDROP_PLATFORM_FEE_SOL = HASHDROP_PLATFORM_FEE_LAMPORTS / Math.pow(10, SOL_DECIMALS);
+export const HASHDROP_FEE_WALLET = 'Amy4Tej83vsnCdFbBtfWmQrEdRLVF4AVAvZupyka8qQT';
+```
+
+The transaction builder (`src/lib/transactions.ts`) uses these constants to build the transfer instruction:
+
+```typescript
+const transferIx = SystemProgram.transfer({
+  fromPubkey: feePayerKey,                  // user's wallet (fee payer, only signer)
+  toPubkey: new PublicKey(HASHDROP_FEE_WALLET),
+  lamports: HASHDROP_PLATFORM_FEE_LAMPORTS, // 1,000,000
+});
+```
+
 ## Transaction Version Costs
 
 ### v0 Transactions (Current)
-- Protocol Fee: 0.001 SOL
-- Network Fee: ~0.000005 SOL
+- Platform Fee: 0.001 SOL (on-chain transfer → fee wallet)
+- Network Fee: ~0.000005 SOL (5000 lamports base)
 - **Total: ~0.001005 SOL**
 
 ### v1 Transactions (Target)
-- Protocol Fee: 0.001 SOL
-- Network Fee: ~0.000005 SOL
+- Platform Fee: 0.001 SOL (on-chain transfer → fee wallet)
+- Network Fee: ~0.000005 SOL (5000 lamports base)
 - **Total: ~0.001005 SOL**
 
 ## Cost Calculation
 
-The cost is calculated as:
+The estimated cost shown in the UI is:
 
 ```typescript
-const PROTOCOL_FEE_SOL = 0.001;
-const NETWORK_FEE_SOL = 0.000005;
-const TOTAL = PROTOCOL_FEE_SOL + NETWORK_FEE_SOL;
+// src/hooks/useCostEstimate.ts
+const protocolFeeLamports = HASHDROP_PLATFORM_FEE_LAMPORTS; // 1,000,000
+const networkFeeLamports = 5000;                            // base fee estimate
+const totalLamports = networkFeeLamports + protocolFeeLamports; // 1,005,000
 ```
+
+Note: the base network fee is currently a hardcoded estimate (5000 lamports from `getBaseTransactionFee()`); it is not fetched via `getFeeForMessage`. `totalWithNetworkFeeLamports` in `useCostEstimate.ts` double-counts the network fee and is not used by the publish page display.
 
 ## Fee Transparency
 
-Users see:
+Users see (before signing):
 
-1. Protocol Fee: 0.001 SOL
+1. Platform Fee: 0.001 SOL (actual on-chain transfer to the HashDrop fee wallet)
 2. Network Fee: ~0.000005 SOL
 3. Total: ~0.001005 SOL
 
@@ -107,14 +132,13 @@ The transaction itself is the publication record.
 
 ## RPC Cost Estimation
 
-The application uses Solana Kit RPC for dynamic fee estimation:
+The application currently uses Solana Kit RPC for blockchain operations (getLatestBlockhash, etc.), but the network-fee estimate is a hardcoded base-fee value (5000 lamports) returned by `getBaseTransactionFee()` in `src/lib/solana/networkCost.ts`. It does **not** call `getFeeForMessage` for the publish flow.
 
 ```typescript
-// Get fee for message
-const fee = await rpc.getFeeForMessage(message).send();
-
-// Get minimum balance for rent exemption
-const minBalance = await rpc.getMinimumBalanceForRentExemption(size).send();
+// Current base-fee estimate (src/lib/solana/networkCost.ts)
+export async function getBaseTransactionFee(): Promise<number> {
+  return 5000; // base transaction fee in lamports
+}
 ```
 
 ## Network-Specific Costs

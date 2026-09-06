@@ -26,6 +26,13 @@
 - [x] Migrate transactions.ts to use Solana Kit RPC
 - [x] Update page.tsx to use Solana Kit RPC
 - [x] Update all .md documentation files
+- [x] Implement real HashDrop platform fee (SystemProgram.transfer 0.001 SOL → fee wallet)
+- [x] Add shared platform-fee constants (HASHDROP_PLATFORM_FEE_LAMPORTS, HASHDROP_FEE_WALLET)
+- [x] Fix confirmation-modal cost double-count (0.001010 → 0.001005 SOL)
+- [x] Add transaction-builder tests (transactions.test.ts)
+- [x] Add production favicon (src/app/icon.svg)
+- [x] Fix Tailwind v4 preflight (globals.css)
+- [x] Fix viewer page mobile layout (signature box overflow)
 
 ## Architecture Summary
 
@@ -79,21 +86,22 @@
 
 Run `npm test` to execute Jest tests for content engine and memo utilities.
 
-**Test Results:** 30/30 tests passing
+**Test Results:** 44/44 tests passing
 
 ## Configuration
 
 - ESLint: Configured in `.eslintrc.json`
 - TypeScript: Compiles without errors
-- Jest: Jest 30.4.1 with 30 tests
+- Jest: Jest 30.4.1 with 44 tests
 
 ## Current Status
 
 ✅ Build successful
-✅ Tests passing (30/30)
+✅ Tests passing (44/44)
 ✅ TypeScript compilation clean
 ✅ Memo Drop feature complete
 ✅ Wallet integration working
+✅ Real platform fee (0.001 SOL) transferred on-chain to HashDrop fee wallet
 ✅ v1 SDK support available
 ✅ Solana Kit RPC migration complete
 ⚠️ v1 wallet support pending (Phantom)

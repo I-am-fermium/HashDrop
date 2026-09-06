@@ -8,7 +8,16 @@ This file records the current state of AI-assisted development so Cline can cont
 
 Phase 0 — Specification complete. Phase 1 (Static UI) complete. Phase 2 (Local Content Engine) complete. Phase 3 (Wallet Integration) complete. Phase 4 (Memo Drop) complete. Phase 5 (Testing & Verification) complete. Phase 6 (RPC Migration) complete.
 
-**Recent Updates (2026-08-22):**
+**Recent Updates (2026-09-06):**
+- ✅ Implemented real HashDrop platform fee: publish transactions include a `SystemProgram.transfer` (0.001 SOL / 1,000,000 lamports) from the user's wallet to `Amy4Tej83vsnCdFbBtfWmQrEdRLVF4AVAvZupyka8qQT`
+- ✅ Added single source of truth constants: `HASHDROP_PLATFORM_FEE_LAMPORTS`, `HASHDROP_PLATFORM_FEE_SOL`, `HASHDROP_FEE_WALLET` in `src/lib/constants.ts`
+- ✅ Fixed confirmation-modal cost double-count (0.001005 → previously 0.001010 SOL)
+- ✅ Added transaction-builder test suite (`src/lib/transactions.test.ts`)
+- ✅ Added production favicon `src/app/icon.svg` (red "H" on dark square)
+- ✅ Updated Tailwind v4 preflight in `src/styles/globals.css` (`@import "tailwindcss"`)
+- ✅ Fixed viewer (retrieve) page mobile layout in `src/app/viewer/page.tsx`
+
+**Previous Updates (2026-08-22):**
 - ✅ Migrated RPC layer to Solana Kit (getLatestBlockhash, etc.)
 - ✅ Created RPC factory pattern in `src/lib/rpc/`
 - ✅ Implemented network-specific RPC configuration
@@ -50,7 +59,7 @@ Phase 0 — Specification complete. Phase 1 (Static UI) complete. Phase 2 (Local
 ### Verification
 - Supports legacy, v0, and v1 transactions
 - Uses `maxSupportedTransactionVersion: 1` for retrieval
-- All 30 tests passing
+- All 44 tests passing (44/44)
 
 ## Files Modified
 
@@ -72,12 +81,25 @@ Phase 0 — Specification complete. Phase 1 (Static UI) complete. Phase 2 (Local
 - `SOLANA_KIT_MIGRATION.md` - Updated with completed migration status
 - `.env.example` - Updated with Mainnet configuration requirements
 
+## Files Modified (2026-09-06)
+
+### Code
+- `src/lib/constants.ts` - Added `HASHDROP_PLATFORM_FEE_LAMPORTS`, `HASHDROP_PLATFORM_FEE_SOL`, `HASHDROP_FEE_WALLET`
+- `src/lib/transactions.ts` - Added `SystemProgram.transfer` platform fee instruction
+- `src/app/page.tsx` - Fixed confirmation modal double-count
+- `src/components/CostSummary.tsx` - Uses shared platform-fee constant
+- `src/hooks/useCostEstimate.ts` - Uses shared platform-fee constant
+- `src/hooks/usePublish.ts` - Updated dead code to use shared constants and include transfer
+- `src/app/icon.svg` - Added production favicon
+- `src/styles/globals.css` - Fixed Tailwind v4 preflight
+- `src/app/viewer/page.tsx` - Fixed mobile layout (signature box overflow)
+- `src/lib/transactions.test.ts` - Added transaction-builder platform-fee tests
+
 ## Testing Status
 
-- ✅ All 30 tests passing
+- ✅ All 44 tests passing (including 6 new transaction-builder tests)
 - ✅ TypeScript compilation clean
 - ✅ Build successful
-- ✅ Dev server running at http://localhost:3000
 
 ## Next Steps
 

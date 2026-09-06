@@ -15,6 +15,8 @@ Users can publish small text and source-code assets without creating an account,
 - **On-chain storage**: Content is stored directly in Solana transaction memos
 - **Cryptographic verification**: Verify content hash matches published data
 - **Memo Drop**: For small content, uses SPL Memo program, no storage account needed
+- **Real platform fee**: 0.001 SOL is transferred on-chain to the HashDrop fee wallet via a `SystemProgram.transfer` instruction inside the publish transaction
+- **Production favicon**: App Router `src/app/icon.svg` (red "H" brand mark)
 
 ## Publication Method
 
@@ -25,6 +27,7 @@ Users can publish small text and source-code assets without creating an account,
 - No storage account required
 - Lower cost (only protocol fee + network fee)
 - Content stored in transaction memo
+- Each publish transaction sends the HashDrop platform fee (0.001 SOL) to the HashDrop fee wallet via `SystemProgram.transfer`
 
 **Transaction Limits:**
 - **v0 (current)**: 1232 bytes max, ~800 bytes effective content
@@ -128,9 +131,13 @@ HashDrop/
 │   └── Cargo.toml
 ├── src/               # Frontend (TypeScript/React)
 │   ├── app/           # Next.js app router
+│   │   ├── icon.svg   # Production favicon
+│   │   ├── page.tsx   # Publish page
+│   │   └── viewer/    # Retrieve page
 │   ├── components/    # React components
 │   ├── hooks/         # React hooks
 │   ├── lib/           # Utilities and types
+│   │   ├── constants.ts # Fee wallet, network endpoints, sizes
 │   │   ├── content.ts    # Content engine
 │   │   ├── memo.ts       # Memo Drop utilities
 │   │   ├── transactions.ts # Transaction builders
@@ -165,9 +172,10 @@ npm run test:coverage
 ## Current Status
 
 ✅ Build successful
-✅ Tests passing (30/30)
+✅ Tests passing (44/44)
 ✅ Memo Drop feature complete
 ✅ Wallet integration working
+✅ Real platform fee (0.001 SOL) transferred on-chain to HashDrop fee wallet
 ✅ v1 SDK support available
 ✅ Solana Kit RPC migration complete
 ⚠️ v1 wallet support pending (Phantom)

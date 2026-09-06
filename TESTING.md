@@ -19,14 +19,17 @@ Test:
 - `src/lib/content.test.ts` - Content engine tests
 - `src/lib/memo.test.ts` - Memo module tests
 - `src/lib/verification.test.ts` - Verification tests
+- `src/lib/diagnostic.test.ts` - Retrieval diagnostic tests
+- `src/lib/transactions.test.ts` - Transaction-builder tests (platform-fee transfer, memo, v0 version, no ComputeBudget)
 
 ### Test Results
 
 ```
-✅ 30 tests passing
+✅ 44 tests passing
 ✅ All content engine tests pass
 ✅ All memo module tests pass
 ✅ All verification tests pass
+✅ All transaction-builder tests pass (SystemProgram.transfer → fee wallet, 1,000,000 lamports)
 ```
 
 ## Program Tests
@@ -114,6 +117,16 @@ Every protocol bug fixed should receive a regression test where practical.
 - ⏳ Legacy V2 retrieval → PASS
 - ⏳ v0 V2 retrieval → PASS
 - ⏳ v1 V2 retrieval → PASS
+
+### Platform Fee Tests (✅ Implemented)
+- ✅ `SystemProgram.transfer` instruction exists in the publish transaction
+- ✅ Transfer destination is the HashDrop fee wallet (`Amy4Tej83vsnCdFbBtfWmQrEdRLVF4AVAvZupyka8qQT`)
+- ✅ Transfer amount is 1,000,000 lamports (0.001 SOL)
+- ✅ SPL Memo instruction still present with the original HashDrop payload
+- ✅ Transfer is the first instruction, memo is the second
+- ✅ Transaction remains v0 with a single signer (user wallet only)
+- ✅ No ComputeBudget priority-fee instruction was introduced
+- ✅ Platform fee is encoded in the transaction instructions (not display-only)
 
 ## RPC Migration Testing
 

@@ -187,7 +187,8 @@ Cline must stop and request review for these changes.
 
 **Phase 6 Complete**: RPC Migration to Solana Kit finished
 **Status**: Memo Drop implementation complete, testing complete
-**Tests**: 30/30 passing
+**Platform Fee**: Real on-chain `SystemProgram.transfer` (0.001 SOL → `HASHDROP_FEE_WALLET`) included in every publish transaction
+**Tests**: 44/44 passing
 **Build**: Successful
 **Next**: Devnet deployment (human required), Mainnet testing (requires RPC URL)
 
