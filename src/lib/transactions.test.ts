@@ -36,7 +36,7 @@ if (
 // Deterministic, valid test account (payer / fee payer = the "user wallet")
 const FEE_PAYER = new PublicKey('4wBqpZM9xaSheZzJSMawUKKwhdpChKbZ5eu5ky4Vigw');
 const BLOCKHASH = '11111111111111111111111111111111';
-const MEMO_PAYLOAD = 'HASHDROP|v2|MEMO|hd_abc12345|hash1234567890abcdef|text/plain|100|SGVsbG8sIFdvcmxk';
+const MEMO_PAYLOAD = 'HASHDROP|v3|PUBLIC|hd_abc12345|hash1234567890abcdef|text/plain|100|SGVsbG8sIFdvcmxk';
 
 /** Build the transaction exactly as the publish path does (v0, no RPC). */
 function buildTx(): VersionedTransaction {
@@ -143,5 +143,135 @@ describe('HashDrop Transaction Builder platform fee', () => {
     if (transferIx) {
       expect(Number(readTransferLamports(transferIx.data))).toBe(HASHDROP_PLATFORM_FEE_LAMPORTS);
     }
+  });
+});
+
+// ============================================================
+// Proof Mode (V3) Transaction Construction Tests
+// ============================================================
+
+import { encodeProofPayload } from './memo';
+
+const PROOF_PAYLOAD = 'HASHDROP|v3|PROOF|hd_abc12345|' + 'a'.repeat(64) + '|100';
+
+/** Build a Proof Mode transaction exactly as the proof publish path does. */
+function buildProofTx(): VersionedTransaction {
+  return buildV1Transaction(PROOF_PAYLOAD, FEE_PAYER.toBase58(), BLOCKHASH, BigInt(0));
+}
+
+describe('HashDrop Proof Mode Transaction Construction', () => {
+  it('should contain the SPL Memo instruction with the V3 PROOF payload', () => {
+    const tx = buildProofTx();
+    const keys = tx.message.staticAccountKeys;
+    const ix = tx.message.compiledInstructions;
+
+    const memoIx = ix.find(
+      (ci) => keys[ci.programIdIndex].toBase58() === MEMO_PROGRAM_ID
+    );
+
+    expect(memoIx).toBeDefined();
+    if (!memoIx) return;
+
+    expect(memoIx.accountKeyIndexes.length).toBe(0);
+    expect(Buffer.from(memoIx.data).toString('utf8')).toBe(PROOF_PAYLOAD);
+  });
+
+  it('should contain the platform fee transfer instruction (atomic with proof memo)', () => {
+    const tx = buildProofTx();
+    const keys = tx.message.staticAccountKeys;
+    const ix = tx.message.compiledInstructions;
+
+    const transferIx = ix.find(
+      (ci) => keys[ci.programIdIndex].toBase58() === SystemProgram.programId.toBase58()
+    );
+
+    expect(transferIx).toBeDefined();
+    if (!transferIx) return;
+
+    // Fee amount = 1,000,000 lamports
+    expect(Number(readTransferLamports(transferIx.data))).toBe(HASHDROP_PLATFORM_FEE_LAMPORTS);
+    // Destination = fee wallet
+    expect(keys[transferIx.accountKeyIndexes[1]].toBase58()).toBe(HASHDROP_FEE_WALLET);
+  });
+
+  it('should have exactly two instructions: transfer first, memo second', () => {
+    const tx = buildProofTx();
+    const keys = tx.message.staticAccountKeys;
+    const ix = tx.message.compiledInstructions;
+
+    expect(ix.length).toBe(2);
+    expect(keys[ix[0].programIdIndex].toBase58()).toBe(SystemProgram.programId.toBase58());
+    expect(keys[ix[1].programIdIndex].toBase58()).toBe(MEMO_PROGRAM_ID);
+  });
+
+  it('should remain a v0 transaction with a single signer (the user wallet)', () => {
+    const tx = buildProofTx();
+
+    expect(tx.message.version).toBe(0);
+    expect(tx.signatures.length).toBe(1);
+    const keys = tx.message.staticAccountKeys;
+    const feePayerIndex = tx.message.header.numRequiredSignatures;
+    expect(keys.slice(0, feePayerIndex).map((k) => k.toBase58())).toEqual([FEE_PAYER.toBase58()]);
+  });
+
+  it('should NOT contain any ComputeBudget priority-fee instruction', () => {
+    const tx = buildProofTx();
+    const keys = tx.message.staticAccountKeys;
+    const ix = tx.message.compiledInstructions;
+
+    const computeBudgetProgramId = ComputeBudgetProgram.programId.toBase58();
+    const hasComputeBudget = ix.some(
+      (ci) => keys[ci.programIdIndex].toBase58() === computeBudgetProgramId
+    );
+
+    expect(hasComputeBudget).toBe(false);
+    expect(keys.some((k) => k.toBase58() === computeBudgetProgramId)).toBe(false);
+  });
+
+  it('should NOT store the original content in the memo', () => {
+    const tx = buildProofTx();
+    const keys = tx.message.staticAccountKeys;
+    const ix = tx.message.compiledInstructions;
+
+    const memoIx = ix.find(
+      (ci) => keys[ci.programIdIndex].toBase58() === MEMO_PROGRAM_ID
+    );
+
+    expect(memoIx).toBeDefined();
+    if (!memoIx) return;
+
+    const memoText = Buffer.from(memoIx.data).toString('utf8');
+
+    // The memo should be the compact proof payload, NOT contain any original content
+    expect(memoText).toBe(PROOF_PAYLOAD);
+    expect(memoText).toContain('HASHDROP|v3|PROOF|');
+    // Should NOT contain base64-encoded content (which V2 would have)
+    expect(memoText.split('|').length).toBe(6);
+  });
+
+  it('should produce a compact memo (no base64 content blob)', () => {
+    const proofTx = buildProofTx();
+
+    const proofKeys = proofTx.message.staticAccountKeys;
+    const proofIx = proofTx.message.compiledInstructions;
+    const proofMemoIx = proofIx.find(
+      (ci) => proofKeys[ci.programIdIndex].toBase58() === MEMO_PROGRAM_ID
+    );
+
+    if (!proofMemoIx) return;
+
+    const memoText = Buffer.from(proofMemoIx.data).toString('utf8');
+
+    // Proof memo has exactly 6 fields (no base64 content blob, no mimeType)
+    const parts = memoText.split('|');
+    expect(parts.length).toBe(6);
+
+    // The memo should NOT contain any base64-encoded content
+    // V2 memo would have 8 fields with the last being base64 content
+    // V3 proof memo has only 6 fields: protocol, version, mode, id, hash, size
+    expect(parts[0]).toBe('HASHDROP');
+    expect(parts[1]).toBe('v3');
+    expect(parts[2]).toBe('PROOF');
+    expect(parts[5]).toBe('100'); // contentSize
   });
 });

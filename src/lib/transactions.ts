@@ -11,7 +11,7 @@
 
 import { PublicKey, SystemProgram, VersionedTransaction, TransactionMessage, TransactionInstruction, Connection } from '@solana/web3.js';
 import { HASHDROP_PLATFORM_FEE_LAMPORTS, HASHDROP_FEE_WALLET } from './constants';
-import { encodeMemoPayload, MEMO_PROGRAM_ID } from './memo';
+import { encodePublicPayload, encodeProofPayload, encodePrivatePayload, MEMO_PROGRAM_ID } from './memo';
 import { utf8ToBase64 } from './encoding';
 import {
   detectTransactionCapabilities as _detectTransactionCapabilities,
@@ -28,11 +28,11 @@ export { _detectTransactionCapabilities as detectTransactionCapabilities };
 export const V1_TRANSACTION_MAX_BYTES_CONST = 4096;
 
 /**
- * Build a Memo Drop transaction using v1 format
- * Creates a transaction with a memo instruction containing the HashDrop payload
- * Uses v1 format (VersionedTransaction with MessageV1) - 4096 bytes max
+ * Build a Public Mode transaction using v1 format
+ * Creates a transaction with an SPL Memo instruction containing the V3 PUBLIC payload
+ * Uses v1 format (VersionedTransaction with MessageV0) - 4096 bytes max
  */
-export async function buildMemoDropTransaction(
+export async function buildPublicTransaction(
   content: string,
   hashDropId: string,
   contentHash: string,
@@ -76,11 +76,11 @@ export async function buildMemoDropTransaction(
     throw error;
   }
   
-  // Encode content as base64 for V2 format (UTF-8 safe)
+  // Encode content as base64 for V3 Public format (UTF-8 safe)
   const base64Content = utf8ToBase64(content);
-  
-  // Encode memo payload
-  const memoPayload = encodeMemoPayload(
+
+  // Encode public payload
+  const memoPayload = encodePublicPayload(
     hashDropId,
     contentHash,
     contentType,
@@ -97,6 +97,165 @@ export async function buildMemoDropTransaction(
   );
   
   console.log('[HashDrop] Built v1 transaction');
+  return transaction;
+}
+
+/**
+ * Build a Proof Mode transaction using v1 format
+ * Creates a transaction with a memo instruction containing the V3 PROOF payload
+ * Uses v1 format (VersionedTransaction with MessageV0) - 4096 bytes max
+ *
+ * The original content is NEVER stored on-chain. Only the SHA-256 commitment
+ * and the original byte length are published. The transaction includes the
+ * platform-fee transfer instruction, atomically bundled with the proof memo.
+ */
+export async function buildProofDropTransaction(
+  hashDropId: string,
+  contentHash: string,
+  contentSize: number,
+  address: string,
+  connection?: Connection
+): Promise<VersionedTransaction> {
+  // Detect transaction capabilities
+  const capabilities = await _detectTransactionCapabilities(connection);
+  console.log('[HashDrop] Transaction capabilities:', capabilities);
+
+  // Get latest blockhash using Solana Kit RPC
+  let blockhash = '';
+  let lastValidBlockHeight: bigint = BigInt(0);
+
+  // Use Solana Kit RPC for getLatestBlockhash
+  const rpc = createRpc();
+  const network = getCurrentNetwork();
+
+  console.log('[HashDrop] getLatestBlockhash via Solana Kit:', {
+    network,
+    provider: network === 'mainnet' ? 'Helius' : 'Solana',
+  });
+
+  try {
+    const blockhashResult = await rpc.getLatestBlockhash({ commitment: 'confirmed' }).send();
+    blockhash = blockhashResult.value.blockhash;
+    lastValidBlockHeight = BigInt(blockhashResult.value.lastValidBlockHeight);
+    console.log('[HashDrop] Blockhash obtained:', {
+      blockhash: blockhash.substring(0, 8) + '...',
+      lastValidBlockHeight: lastValidBlockHeight.toString(),
+    });
+  } catch (error: any) {
+    console.error('[HashDrop] getLatestBlockhash failed:', {
+      operation: 'getLatestBlockhash',
+      network,
+      message: error?.message || 'Unknown error',
+      code: error?.code,
+    });
+    throw error;
+  }
+
+  // Encode proof payload — ONLY the cryptographic commitment, never the content itself
+  const memoPayload = encodeProofPayload(
+    hashDropId,
+    contentHash,
+    contentSize
+  );
+
+  // Build v1 transaction using web3.js native API
+  const transaction = buildV1Transaction(
+    memoPayload,
+    address,
+    blockhash,
+    lastValidBlockHeight
+  );
+
+  console.log('[HashDrop] Built v1 proof transaction');
+  return transaction;
+}
+
+/**
+ * Build a Private Mode transaction using v1 format
+ * Creates a transaction with an SPL Memo instruction containing the V3 PRIVATE payload
+ * Uses v1 format (VersionedTransaction with MessageV0) - 4096 bytes max
+ *
+ * The original content is NEVER stored on-chain. Only the encrypted ciphertext,
+ * ML-KEM encapsulated key, and metadata are published. The transaction includes
+ * the platform-fee transfer instruction, atomically bundled with the private memo.
+ *
+ * @param hashDropId - Deterministic HashDrop ID
+ * @param contentHash - SHA-256 of plaintext (hex)
+ * @param contentSize - Original UTF-8 byte length
+ * @param contentType - MIME type of original content
+ * @param keyFingerprint - ML-KEM public key fingerprint (hex)
+ * @param encryptedKeyIvBase64 - IV for encrypted AES key envelope (Base64)
+ * @param encryptedKeyBase64 - Encrypted AES key envelope (Base64)
+ * @param address - User wallet address (fee payer)
+ * @param connection - Optional Solana connection
+ */
+export async function buildPrivateTransaction(
+  hashDropId: string,
+  contentHash: string,
+  contentSize: number,
+  contentType: string,
+  keyFingerprint: string,
+  encryptedKeyIvBase64: string,
+  encryptedKeyBase64: string,
+  address: string,
+  connection?: Connection
+): Promise<VersionedTransaction> {
+  // Detect transaction capabilities
+  const capabilities = await _detectTransactionCapabilities(connection);
+  console.log('[HashDrop] Transaction capabilities:', capabilities);
+
+  // Get latest blockhash using Solana Kit RPC
+  let blockhash = '';
+  let lastValidBlockHeight: bigint = BigInt(0);
+
+  // Use Solana Kit RPC for getLatestBlockhash
+  const rpc = createRpc();
+  const network = getCurrentNetwork();
+
+  console.log('[HashDrop] getLatestBlockhash via Solana Kit:', {
+    network,
+    provider: network === 'mainnet' ? 'Helius' : 'Solana',
+  });
+
+  try {
+    const blockhashResult = await rpc.getLatestBlockhash({ commitment: 'confirmed' }).send();
+    blockhash = blockhashResult.value.blockhash;
+    lastValidBlockHeight = BigInt(blockhashResult.value.lastValidBlockHeight);
+    console.log('[HashDrop] Blockhash obtained:', {
+      blockhash: blockhash.substring(0, 8) + '...',
+      lastValidBlockHeight: lastValidBlockHeight.toString(),
+    });
+  } catch (error: any) {
+    console.error('[HashDrop] getLatestBlockhash failed:', {
+      operation: 'getLatestBlockhash',
+      network,
+      message: error?.message || 'Unknown error',
+      code: error?.code,
+    });
+    throw error;
+  }
+
+  // Encode private payload — ONLY commitment + encrypted key envelope
+  // The encrypted content artifact is stored off-chain
+  const memoPayload = encodePrivatePayload(
+    hashDropId,
+    contentHash,
+    contentSize,
+    contentType,
+    keyFingerprint,
+    encryptedKeyIvBase64,
+    encryptedKeyBase64
+  );
+
+  // Build v1 transaction using web3.js native API
+  const transaction = buildV1Transaction(
+    memoPayload,
+    address,
+    blockhash,
+    lastValidBlockHeight
+  );
+
+  console.log('[HashDrop] Built v1 private transaction');
   return transaction;
 }
 
@@ -230,7 +389,7 @@ export function getTransactionVersion(transaction: VersionedTransaction): Transa
  * Build a transaction and validate its size
  * Returns the transaction and its serialized size
  */
-export async function buildAndValidateTransaction(
+export async function buildAndValidatePublicTransaction(
   content: string,
   hashDropId: string,
   contentHash: string,
@@ -244,7 +403,7 @@ export async function buildAndValidateTransaction(
   version: TransactionVersionType;
   capabilities: SolanaTransactionCapabilities;
 }> {
-  const transaction = await buildMemoDropTransaction(
+  const transaction = await buildPublicTransaction(
     content,
     hashDropId,
     contentHash,
@@ -253,10 +412,10 @@ export async function buildAndValidateTransaction(
     address,
     connection
   );
-  
+
   const serializedSize = getTransactionSize(transaction);
   const version = getTransactionVersion(transaction);
-  
+
   return {
     transaction,
     serializedSize,
@@ -280,9 +439,9 @@ export function getMaxTransactionBytes(_capabilities?: any): number {
 }
 
 /**
- * Build a transaction using Kit-compatible Address type
+ * Build a Public Mode transaction using Kit-compatible Address type
  */
-export async function buildMemoDropTransactionFromAddress(
+export async function buildPublicTransactionFromAddress(
   content: string,
   hashDropId: string,
   contentHash: string,
@@ -291,7 +450,7 @@ export async function buildMemoDropTransactionFromAddress(
   address: string, // Address as string (Kit-compatible)
   connection?: Connection
 ): Promise<VersionedTransaction> {
-  return buildMemoDropTransaction(
+  return buildPublicTransaction(
     content,
     hashDropId,
     contentHash,

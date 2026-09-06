@@ -55,23 +55,23 @@ When retrieving content:
 
 Location: `src/lib/content.ts`
 
-The ID is generated during content processing and included in the V2 memo payload:
+The ID is generated during content processing and included in all V3 payloads:
 
 ```
-HASHDROP|v2|MEMO|<hashDropId>|<sha256>|<mimeType>|<length>|<base64Content>
+HASHDROP|v3|<MODE>|...
 ```
 
-## Memo Drop Format
+## V3 PUBLIC Format
 
-The complete memo payload format is:
+The complete Public mode payload format is:
 
 ```
-HASHDROP|v2|MEMO|<hashDropId>|<sha256>|<mimeType>|<length>|<base64Content>
+HASHDROP|v3|PUBLIC|<hashDropId>|<sha256>|<mimeType>|<contentSize>|<base64Content>
 ```
 
 Where:
-- `v2` - Protocol version
-- `MEMO` - Publication method identifier
+- `v3` - Protocol version
+- `PUBLIC` - Mode identifier
 - `<hashDropId>` - Deterministic identifier
 - `<sha256>` - SHA-256 hash of content
 - `<mimeType>` - Content type (e.g., text/plain)

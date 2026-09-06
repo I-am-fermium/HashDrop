@@ -9,14 +9,14 @@ import { useState, useCallback } from 'react';
 import { Connection, PublicKey, SystemProgram, Transaction, TransactionInstruction, VersionedTransaction } from '@solana/web3.js';
 import { processContent, ContentMeta } from '../lib/content';
 import { DEVNET_ENDPOINT, HASHDROP_PLATFORM_FEE_LAMPORTS, HASHDROP_FEE_WALLET } from '../lib/constants';
-import { encodeMemoPayload, canFitInMemo, MEMO_PROGRAM_ID } from '../lib/memo';
+import { encodePublicPayload, canFitInMemo, MEMO_PROGRAM_ID } from '../lib/memo';
 import {
   getBaseTransactionFee,
   getConnection,
   lamportsToSol,
 } from '../lib/solana/networkCost';
 import {
-  buildMemoDropTransaction,
+  buildPublicTransaction,
   serializeTransaction,
   getTransactionSize,
   getMaxTransactionBytes,
@@ -97,7 +97,7 @@ export function usePublish() {
     const hashDropId = `hd_test_${Date.now()}`;
     const contentHash = '0'.repeat(64); // Placeholder
     
-    const memoPayload = encodeMemoPayload(
+    const memoPayload = encodePublicPayload(
       hashDropId,
       contentHash,
       'text/plain',
@@ -193,11 +193,11 @@ export function usePublish() {
       const connection = getConnectionLocal();
       const { blockhash } = await connection.getLatestBlockhash();
       
-      // Encode content as base64 for V2 format
+      // Encode content as base64 for V3 Public format
       const base64Content = btoa(content);
-      
-      // Encode memo payload
-      const memoPayload = encodeMemoPayload(
+
+      // Encode public payload
+      const memoPayload = encodePublicPayload(
         meta.hashDropId,
         meta.hash,
         'text/plain',

@@ -11,9 +11,9 @@
                      |
             HashDrop ID
                      |
-            V2 Memo Drop
+            V3 PUBLIC/PROOF
                      |
-            Solana Network
+            Solana Network (SPL Memo)
                      |
           Transaction Signature
                      |
@@ -121,26 +121,91 @@ Verification must be understandable without trusting a HashDrop backend.
 
 If any check fails, show a verification failure rather than a best-effort preview.
 
-## Memo Drop Protocol
+## HashDrop Protocol v3
 
-Content is published using Solana transactions with the SPL Memo program:
+Content is published using Solana transactions with the SPL Memo program.
+
+### PUBLIC Mode
 
 ```text
 Content
    ↓
-SHA-256
+SHA-256 + Base64
    ↓
 HashDrop ID
    ↓
-V2 Memo Drop
+V3 PUBLIC payload
    ↓
-Solana transaction
+Solana transaction (SPL Memo instruction)
    ↓
 Transaction Signature
 ```
 
-The memo payload format is:
-`HASHDROP|v2|MEMO|hashDropId|sha256|mimeType|length|base64Content`
+Payload format:
+`HASHDROP|v3|PUBLIC|hashDropId|sha256|mimeType|contentSize|base64Content`
+
+### PROOF Mode
+
+```text
+Content
+   ↓
+SHA-256 (exact UTF-8 bytes)
+   ↓
+HashDrop ID
+   ↓
+V3 PROOF payload (hash + size only)
+   ↓
+Solana transaction (SPL Memo instruction)
+   ↓
+Transaction Signature
+```
+
+Payload format:
+`HASHDROP|v3|PROOF|hashDropId|sha256|contentSize`
+
+### PRIVATE Mode
+
+```text
+Content
+   │
+   ├── SHA-256 → plaintext hash (on-chain commitment)
+   │
+   └── random AES-256 key (independently generated)
+          │
+          ├───────────────┐
+          │               │
+          ▼               ▼
+     AES-256-GCM      ML-KEM-768
+          │               │
+          ▼               ▼
+     ciphertext      ML-KEM shared secret
+     (in artifact)        │
+                          ▼
+                     HKDF-SHA-256
+                          │
+                          ▼
+                     key-encryption key (KEK)
+                          │
+                          ▼
+                     AES-256-GCM wrapping
+                          │
+                          ▼
+                     encrypted AES-key envelope
+                     (on-chain)
+```
+
+Payload format:
+`HASHDROP|v3|PRIVATE|hashDropId|sha256|contentSize|mimeType|cryptoVersion|keyFingerprint|encryptedKeyIv|encryptedKey`
+
+Cryptography:
+- **AES-256-GCM**: Symmetric encryption for content (Web Crypto API)
+- **ML-KEM-768**: Post-quantum key encapsulation (FIPS 203, mlkem npm package)
+- **HKDF-SHA-256**: Key derivation from ML-KEM shared secret
+- Key lifecycle: Generate random AES key → AES-GCM encrypt content → ML-KEM encapsulate → HKDF derive KEK → AES-GCM wrap AES key
+- On-chain size: ~255 bytes (fits within current 1232-byte Solana limit)
+- Serialized transaction: 492 bytes (measured)
+
+The encrypted content artifact is user-controlled/off-chain.
 
 No storage accounts are created. No chunking is needed. The transaction itself is the publication record.
 

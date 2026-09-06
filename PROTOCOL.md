@@ -16,12 +16,21 @@ FINALIZED is terminal for HashDrop mutations.
 
 ## Publication Method
 
-HashDrop uses Memo Drop for all publications:
+HashDrop uses the SPL Memo program for all publications:
 
 - Uses Solana's SPL Memo program
 - No storage account required
 - Content stored in transaction memo
 - Lower cost (only protocol fee + network fee)
+
+## Protocol Version
+
+HashDrop Protocol v3 is the current and only supported protocol version.
+
+Supported modes:
+- **PUBLIC** - Content is published on-chain
+- **PROOF** - Only the cryptographic proof is published; original content remains private
+- **PRIVATE** - Content is encrypted locally before publication; only the key holder can decrypt
 
 ## Metadata account
 
@@ -83,22 +92,214 @@ On success, status becomes FINALIZED.
 
 Optional helper instruction. Client-side verification remains mandatory for the product experience.
 
-## Memo Drop Format
+## V3 PUBLIC Format
 
-The memo payload format is:
+The Public mode payload format is:
 
 ```
-HASHDROP|v2|MEMO|<hashDropId>|<sha256>|<mimeType>|<length>|<base64Content>
+HASHDROP|v3|PUBLIC|<hashDropId>|<sha256>|<mimeType>|<contentSize>|<base64Content>
 ```
 
 Where:
-- `v2` - Protocol version
-- `MEMO` - Publication method identifier
+- `v3` - Protocol version
+- `PUBLIC` - Mode identifier (content published on-chain)
 - `<hashDropId>` - Deterministic identifier
 - `<sha256>` - SHA-256 hash of content
 - `<mimeType>` - Content type (e.g., text/plain)
-- `<length>` - Content length in bytes
+- `<contentSize>` - Content length in bytes
 - `<base64Content>` - Base64-encoded content
+
+## V3 PROOF Format
+
+The Proof mode payload format is:
+
+```
+HASHDROP|v3|PROOF|<hashDropId>|<sha256>|<contentSize>
+```
+
+Where:
+- `v3` - Protocol version
+- `PROOF` - Mode identifier (only cryptographic commitment published)
+- `<hashDropId>` - Deterministic identifier
+- `<sha256>` - SHA-256 hash of exact UTF-8 content bytes
+- `<contentSize>` - Exact UTF-8 byte length
+
+Note: Proof mode does NOT store the original content, mimeType, or any timestamp/slot/blockTime.
+The original content never leaves the browser.
+
+## V3 PRIVATE Format
+
+The Private mode payload format is:
+
+```
+HASHDROP|v3|PRIVATE|<hashDropId>|<sha256>|<contentSize>|<mimeType>|<cryptoVersion>|<keyFingerprint>|<encryptedKeyIv>|<encryptedKey>
+```
+
+Where:
+- `v3` - Protocol version
+- `PRIVATE` - Mode identifier (commitment + encrypted key envelope on-chain)
+- `<hashDropId>` - Deterministic identifier
+- `<sha256>` - SHA-256 hash of original plaintext (hex)
+- `<contentSize>` - Original UTF-8 byte length
+- `<mimeType>` - MIME type of original content
+- `<cryptoVersion>` - Cryptographic construction version (e.g., `HD-P1`)
+- `<keyFingerprint>` - ML-KEM-768 public key fingerprint (first 16 hex chars of SHA-256)
+- `<encryptedKeyIv>` - IV for encrypted AES key envelope (Base64, 16 chars)
+- `<encryptedKey>` - Encrypted AES-256 key envelope (Base64, 64 chars for 48 bytes)
+
+Note: Private mode does NOT store the original content, AES ciphertext, AES key, or ML-KEM secret key on-chain.
+The encrypted content artifact is user-controlled/off-chain.
+
+## Private Mode Cryptography
+
+### Hybrid Encryption Architecture
+
+Private mode uses hybrid encryption combining classical and post-quantum cryptography:
+
+1. **AES-256-GCM** - Symmetric encryption for content
+   - 256-bit key generated per drop (CSPRNG)
+   - 96-bit IV/nonce generated per encryption operation
+   - GCM mode provides authenticated encryption (confidentiality + integrity)
+   - Key and IV are never reused
+   - AAD binds encryption to HashDrop metadata
+
+2. **ML-KEM-768** - Post-quantum key encapsulation (FIPS 203)
+   - Protects the AES-256 key
+   - NIST Level 3 security (~192-bit post-quantum security)
+   - Public key: 1184 bytes, Secret key: 2400 bytes, Ciphertext: 1088 bytes
+
+3. **HKDF-SHA-256** - Key derivation
+   - Derives key-encryption key (KEK) from ML-KEM shared secret
+   - Domain-separated salt and info construction
+   - 32-byte output
+
+### Cryptographic Construction
+
+```
+random AES-256 content key (32 bytes, CSPRNG)
+       │
+       ├───────────────┐
+       │               │
+       ▼               ▼
+  AES-256-GCM      ML-KEM-768
+       │               │
+       ▼               ▼
+  ciphertext      ML-KEM shared secret
+  (in artifact)        │
+                       ▼
+                  HKDF-SHA-256
+                       │
+                       ▼
+                  key-encryption key (KEK)
+                       │
+                       ▼
+                  AES-256-GCM wrapping
+                       │
+                       ▼
+                  encrypted AES-key envelope
+                  (on-chain)
+```
+
+### AAD Construction
+
+**Key-envelope AAD:**
+```
+HASHDROP-PRIVATE-KEY|v1|<hashDropId>|<sha256>|<contentSize>|<mimeType>|<cryptoVersion>|<keyFingerprint>
+```
+
+**Content-artifact AAD:**
+```
+HASHDROP-PRIVATE-BLOB|v1|<hashDropId>|<sha256>|<contentSize>|<mimeType>|<cryptoVersion>|<keyFingerprint>
+```
+
+### HKDF Construction
+
+```
+salt = utf8ToBytes('HashDrop-Private-HKDF-Salt-v1')
+info = utf8ToBytes('HASHDROP-PRIVATE-KEK|v1|' + keyFingerprint)
+KEK = HKDF-SHA256(ikm=sharedSecret, salt=salt, info=info, length=32)
+```
+
+### Key Lifecycle
+
+1. Generate random AES-256 content key (independently random)
+2. Generate random 96-bit content IV
+3. Encrypt content with AES-256-GCM (with AAD) → encrypted artifact
+4. Encapsulate with ML-KEM-768 public key → shared secret
+5. Derive KEK via HKDF-SHA-256 from shared secret
+6. Wrap random AES key with KEK (with AAD) → encrypted key envelope
+7. Store on-chain: commitment + encrypted key envelope
+8. Store off-chain: encrypted artifact
+
+### Decryption
+
+1. Verify artifact metadata matches transaction metadata
+2. Decapsulate ML-KEM ciphertext with secret key → shared secret
+3. Derive KEK via HKDF-SHA-256 from shared secret
+4. Reconstruct exact key-envelope AAD
+5. Unwrap encrypted AES key with KEK (with AAD)
+6. Reconstruct exact content AAD
+7. Decrypt AES-GCM ciphertext with AES key (with AAD)
+8. Verify plaintext byte length
+9. Verify plaintext SHA-256
+
+### Size Analysis
+
+Private mode on-chain overhead:
+- Protocol prefix: ~18 bytes
+- HashDrop ID: ~20 bytes
+- SHA-256: 64 bytes
+- Metadata: ~25 bytes
+- Crypto version: ~4 bytes
+- Key fingerprint: ~16 bytes
+- Encrypted key IV (Base64): ~24 bytes
+- Encrypted key (Base64): ~64 bytes
+- Pipe separators: ~10 bytes
+- **Total: ~255 bytes**
+
+Serialized transaction size: **492 bytes** (measured)
+Current Solana limit: **1232 bytes**
+Remaining headroom: **740 bytes**
+
+### Encrypted Artifact Format
+
+```
+HASHDROP-PRIVATE-BLOB|v1|<hashDropId>|<sha256>|<contentSize>|<mimeType>|<cryptoVersion>|<keyFingerprint>|<base64-mlkem-ct>|<base64-iv>|<base64-ciphertext>
+```
+
+### Key Export/Import Format
+
+```
+Secret: HASHDROP-KEY|v1|ML-KEM-768|<base64-secret-key>
+Public: HASHDROP-PUBKEY|v1|ML-KEM-768|<base64-public-key>
+```
+
+### Fingerprint Construction
+
+```
+keyFingerprint = SHA256(publicKey).slice(0, 16)
+```
+
+First 16 hex characters (8 bytes) of SHA-256 of ML-KEM-768 public key. NOT a secret - used as identifier.
+
+### Library
+
+- ML-KEM-768: `mlkem` npm package (https://www.npmjs.com/package/mlkem)
+  - Standards-compliant FIPS 203 implementation
+  - Pure TypeScript, browser-compatible
+  - No peer dependencies
+
+### Key Loss Warning
+
+Private content can only be decrypted with the required ML-KEM secret key.
+HashDrop cannot recover lost private keys.
+Users must securely store their secret keys.
+
+### Wallet Integration
+
+The Solana wallet is ONLY responsible for transaction signing.
+ML-KEM keys are managed entirely outside the wallet.
+Do NOT derive AES keys from wallet public keys.
 
 ## Immutability rules
 

@@ -150,11 +150,35 @@ HashDrop/
 └── docs/            # Documentation
 ```
 
-## Memo Drop Format
+## HashDrop Protocol v3
+
+### PUBLIC Mode (content published on-chain)
 
 ```
-HASHDROP|v2|MEMO|<hashDropId>|<sha256>|<mimeType>|<length>|<base64Content>
+HASHDROP|v3|PUBLIC|<hashDropId>|<sha256>|<mimeType>|<contentSize>|<base64Content>
 ```
+
+### PROOF Mode (only cryptographic proof published)
+
+```
+HASHDROP|v3|PROOF|<hashDropId>|<sha256>|<contentSize>
+```
+
+### PRIVATE Mode (commitment on-chain, encrypted content off-chain)
+
+```
+HASHDROP|v3|PRIVATE|<hashDropId>|<sha256>|<contentSize>|<mimeType>|<cryptoVersion>|<keyFingerprint>|<encryptedKeyIv>|<encryptedKey>
+```
+
+Private mode uses hybrid encryption:
+- **AES-256-GCM** for content encryption
+- **ML-KEM-768** (FIPS 203) for post-quantum key protection
+- **HKDF-SHA-256** for key derivation
+
+On-chain size: ~255 bytes (fits within current 1232-byte Solana limit)
+Serialized transaction: 492 bytes (measured)
+
+The encrypted content artifact is user-controlled/off-chain.
 
 ## Testing
 

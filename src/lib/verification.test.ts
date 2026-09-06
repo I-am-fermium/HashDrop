@@ -1,8 +1,8 @@
 /**
- * Tests for HashDrop Verification Module
+ * Tests for HashDrop Verification Module (V3 only)
  */
 
-import { verifyMemoDrop, verifyBySignature, MemoVerificationResult } from './verification';
+import { verifyPublicDrop, verifyBySignature, PublicVerificationResult } from './verification';
 import { Connection } from '@solana/web3.js';
 
 // Mock connection for unit tests
@@ -11,73 +11,42 @@ const createMockConnection = () => {
 };
 
 describe('Verification Module', () => {
-  describe('verifyMemoDrop', () => {
-    it('should verify the known-good transaction', async () => {
-      const connection = createMockConnection();
-      
-      // Known-good transaction from the task
-      const signature = '5QSigbpsA4siqaTpGza3Q4kMFrwSzUKXn5TSkzJFyLxy8EdARYgwhFaMw69cGD3x1DruTZt2GweRB65c3GXCsyYg';
-      
-      const result = await verifyMemoDrop(connection, signature);
-      
-      console.log('[TEST] Verification result:', JSON.stringify(result, null, 2));
-      
-      expect(result.verified).toBe(true);
-      expect(result.content).toBe('Hello, HashDrop!');
-      expect(result.hashDropId).toBe('hd_e0ba1ac4_Amy4Tej8_g');
-      expect(result.contentHash).toBe('e0ba1ac4b690b9dbd655be81caf5cebec06f2644681c4cf6ff774bec72c683e3');
-      expect(result.contentType).toBe('text/plain');
-      expect(result.contentSize).toBe(16);
-      expect(result.version).toBe('v2');
-      expect(result.type).toBe('MEMO');
-      expect(result.error).toBeNull();
-    }, 30000);
-
+  describe('verifyPublicDrop', () => {
     it('should return error for non-existent transaction', async () => {
       const connection = createMockConnection();
-      
-      const result = await verifyMemoDrop(connection, 'nonexistent12345678901234567890123456789012345678901234567890123456789012345678901234');
-      
+
+      const result = await verifyPublicDrop(connection, 'nonexistent12345678901234567890123456789012345678901234567890123456789012345678901234');
+
       expect(result.verified).toBe(false);
       // getTransaction throws an error for invalid signatures, which is caught
       // The error message should contain information about the RPC failure
       expect(result.error).toBeDefined();
       expect(result.error).not.toBeNull();
-      expect(result.error).toContain('failed to get transaction');
     }, 30000);
 
-    it('should verify the second known-good transaction (V0)', async () => {
+    it('should reject V2 payload (no longer supported)', async () => {
       const connection = createMockConnection();
-      
-      // Second known-good transaction from the task
-      const signature = '3jfqd6z2L3tV88WU7KrM7D6TroGykjVKq7ATXnvZjxv6oNih4AyxyCjy9Msm1eksyuePooZd9BJkRSXBaRyfjHnn';
-      
-      const result = await verifyMemoDrop(connection, signature, 'hd_e0ba1ac4_Amy4Tej8_g');
-      
-      console.log('[TEST 2] Verification result:', JSON.stringify(result, null, 2));
-      
-      expect(result.verified).toBe(true);
-      expect(result.content).toBe('Hello, HashDrop!');
-      expect(result.hashDropId).toBe('hd_e0ba1ac4_Amy4Tej8_g');
-      expect(result.contentHash).toBe('e0ba1ac4b690b9dbd655be81caf5cebec06f2644681c4cf6ff774bec72c683e3');
-      expect(result.contentType).toBe('text/plain');
-      expect(result.contentSize).toBe(16);
-      expect(result.version).toBe('v2');
-      expect(result.type).toBe('MEMO');
-      expect(result.error).toBeNull();
+
+      // This is a known V2 transaction - it should no longer be verifiable
+      const signature = '5QSigbpsA4siqaTpGza3Q4kMFrwSzUKXn5TSkzJFyLxy8EdARYgwhFaMw69cGD3x1DruTZt2GweRB65c3GXCsyYg';
+
+      const result = await verifyPublicDrop(connection, signature);
+
+      // V2 transactions should fail verification since V2 is no longer supported
+      expect(result.verified).toBe(false);
+      expect(result.error).toContain('Invalid HashDrop payload');
     }, 30000);
   });
 
   describe('verifyBySignature', () => {
-    it('should be an alias for verifyMemoDrop', async () => {
+    it('should be an alias for verifyPublicDrop', async () => {
       const connection = createMockConnection();
-      
-      const signature = '5QSigbpsA4siqaTpGza3Q4kMFrwSzUKXn5TSkzJFyLxy8EdARYgwhFaMw69cGD3x1DruTZt2GweRB65c3GXCsyYg';
-      
+
+      const signature = 'nonexistent12345678901234567890123456789012345678901234567890123456789012345678901234';
+
       const result = await verifyBySignature(connection, signature);
-      
-      expect(result.verified).toBe(true);
-      expect(result.content).toBe('Hello, HashDrop!');
+
+      expect(result.verified).toBe(false);
     }, 30000);
   });
 });

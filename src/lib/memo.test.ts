@@ -1,53 +1,54 @@
 /**
- * Tests for HashDrop Memo Module (V2 only, v1 transactions)
+ * Tests for HashDrop Protocol Module (V3 only)
  */
 
 import {
-  encodeMemoPayload,
-  decodeMemoPayload,
-  isValidMemoPayload,
+  encodePublicPayload,
+  decodePublicPayload,
+  isValidPublicPayload,
   canFitInMemo,
   MEMO_PROGRAM_ID,
   LEGACY_TRANSACTION_MAX_BYTES,
   V1_TRANSACTION_MAX_BYTES,
   getMaxContentSize,
   calculateTransactionSize,
+  HASHDROP_VERSION,
 } from './memo';
 
-describe('Memo Module', () => {
-  describe('encodeMemoPayload', () => {
-    it('should encode V2 payload correctly', () => {
-      const result = encodeMemoPayload(
+describe('Protocol Module', () => {
+  describe('encodePublicPayload', () => {
+    it('should encode V3 PUBLIC payload correctly', () => {
+      const result = encodePublicPayload(
         'hd_abc12345',
         'hash1234567890abcdef',
         'text/plain',
         100,
         'SGVsbG8sIFdvcmxk'
       );
-      expect(result).toBe('HASHDROP|v2|MEMO|hd_abc12345|hash1234567890abcdef|text/plain|100|SGVsbG8sIFdvcmxk');
+      expect(result).toBe('HASHDROP|v3|PUBLIC|hd_abc12345|hash1234567890abcdef|text/plain|100|SGVsbG8sIFdvcmxk');
     });
 
     it('should handle unicode content', () => {
-      const result = encodeMemoPayload(
+      const result = encodePublicPayload(
         'hd_abc12345',
         'hash1234567890abcdef',
         'text/plain',
         10,
         'SGVsbG8sIEhhc2g=' // "Hello, Hash" in base64
       );
-      expect(result).toContain('HASHDROP|v2|MEMO|');
+      expect(result).toContain('HASHDROP|v3|PUBLIC|');
     });
   });
 
-  describe('decodeMemoPayload', () => {
-    it('should decode valid V2 payload', () => {
-      const payload = 'HASHDROP|v2|MEMO|hd_abc12345|hash1234567890abcdef|text/plain|100|SGVsbG8sIFdvcmxk';
-      const result = decodeMemoPayload(payload);
-      
+  describe('decodePublicPayload', () => {
+    it('should decode valid V3 PUBLIC payload', () => {
+      const payload = 'HASHDROP|v3|PUBLIC|hd_abc12345|hash1234567890abcdef|text/plain|100|SGVsbG8sIFdvcmxk';
+      const result = decodePublicPayload(payload);
+
       expect(result).not.toBeNull();
       expect(result?.protocol).toBe('HASHDROP');
-      expect(result?.version).toBe('v2');
-      expect(result?.type).toBe('MEMO');
+      expect(result?.version).toBe('v3');
+      expect(result?.mode).toBe('PUBLIC');
       expect(result?.hashDropId).toBe('hd_abc12345');
       expect(result?.contentHash).toBe('hash1234567890abcdef');
       expect(result?.contentType).toBe('text/plain');
@@ -56,25 +57,41 @@ describe('Memo Module', () => {
     });
 
     it('should return null for invalid payload', () => {
-      expect(decodeMemoPayload('invalid')).toBeNull();
-      expect(decodeMemoPayload('HASHDROP|v1|...')).toBeNull(); // wrong version
-      expect(decodeMemoPayload('OTHER|v2|MEMO|...')).toBeNull(); // wrong protocol
+      expect(decodePublicPayload('invalid')).toBeNull();
+      expect(decodePublicPayload('HASHDROP|v2|...')).toBeNull(); // wrong version
+      expect(decodePublicPayload('OTHER|v3|PUBLIC|...')).toBeNull(); // wrong protocol
     });
 
     it('should handle malformed size', () => {
-      const payload = 'HASHDROP|v2|MEMO|hd_abc12345|hash1234567890abcdef|text/plain|abc|SGVsbG8=';
-      expect(decodeMemoPayload(payload)).toBeNull();
+      const payload = 'HASHDROP|v3|PUBLIC|hd_abc12345|hash1234567890abcdef|text/plain|abc|SGVsbG8=';
+      expect(decodePublicPayload(payload)).toBeNull();
+    });
+
+    it('should reject V2 payload', () => {
+      const payload = 'HASHDROP|v2|MEMO|hd_abc12345|hash1234567890abcdef|text/plain|100|SGVsbG8=';
+      expect(decodePublicPayload(payload)).toBeNull();
     });
   });
 
-  describe('isValidMemoPayload', () => {
-    it('should validate correct V2 payload', () => {
-      const payload = 'HASHDROP|v2|MEMO|hd_abc12345|hash1234567890abcdef|text/plain|100|SGVsbG8=';
-      expect(isValidMemoPayload(payload)).toBe(true);
+  describe('isValidPublicPayload', () => {
+    it('should validate correct V3 PUBLIC payload', () => {
+      const payload = 'HASHDROP|v3|PUBLIC|hd_abc12345|hash1234567890abcdef|text/plain|100|SGVsbG8=';
+      expect(isValidPublicPayload(payload)).toBe(true);
     });
 
     it('should reject invalid payload', () => {
-      expect(isValidMemoPayload('invalid')).toBe(false);
+      expect(isValidPublicPayload('invalid')).toBe(false);
+    });
+
+    it('should reject V2 payload', () => {
+      const payload = 'HASHDROP|v2|MEMO|hd_abc12345|hash1234567890abcdef|text/plain|100|SGVsbG8=';
+      expect(isValidPublicPayload(payload)).toBe(false);
+    });
+  });
+
+  describe('protocol version', () => {
+    it('should have correct version', () => {
+      expect(HASHDROP_VERSION).toBe('v3');
     });
   });
 

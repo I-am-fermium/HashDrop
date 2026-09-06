@@ -72,12 +72,18 @@ The transaction itself is the publication record.
 
 Do not blindly place arbitrary application metadata into the memo.
 
-HashDrop should use an explicit versioned payload format.
+HashDrop uses an explicit versioned payload format.
 
-Recommended logical format:
+Current format (V3 PUBLIC):
 
 ```text
-HASHDROP|v2|MEMO|<hashDropId>|<sha256>|<mimeType>|<length>|<base64Content>
+HASHDROP|v3|PUBLIC|<hashDropId>|<sha256>|<mimeType>|<contentSize>|<base64Content>
+```
+
+For Proof mode:
+
+```text
+HASHDROP|v3|PROOF|<hashDropId>|<sha256>|<contentSize>
 ```
 
 ---

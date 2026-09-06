@@ -2,68 +2,115 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useWallet } from '../../hooks/useWallet';
-import { verifyBySignature, MemoVerificationResult } from '../../lib/verification';
+import {
+  verifyBySignature,
+  verifyProofDrop,
+  verifyPrivateDrop,
+  PublicVerificationResult,
+  ProofVerificationResult,
+  PrivateVerificationResult,
+} from '../../lib/verification';
 import { getConnection } from '../../lib/solana/networkCost';
-import { Network, getExplorerUrl, isMainnet } from '../../lib/network';
+import { Network, getExplorerUrl, getNetworkDisplay } from '../../lib/network';
+import { importSecretKey } from '../../lib/crypto/keyManager';
+import { importArtifact } from '../../lib/crypto/encryptedArtifact';
+import { normalizeTransactionSignature } from '../../lib/signature';
+
+type ViewerStatus = 'START' | 'FETCHING' | 'DECODING' | 'VERIFYING' | 'VERIFIED' | 'FAILED';
 
 export default function Viewer() {
   const [hashDropId, setHashDropId] = useState('');
   const [signature, setSignature] = useState('');
-  const [status, setStatus] = useState<'START' | 'FETCHING' | 'FINDING' | 'DECODING' | 'VERIFYING' | 'VERIFIED' | 'FAILED'>('START');
-  const [result, setResult] = useState<MemoVerificationResult | null>(null);
+  const [status, setStatus] = useState<ViewerStatus>('START');
   const [error, setError] = useState<string | null>(null);
   const [network, setNetworkState] = useState<Network>('devnet');
+  const [publicResult, setPublicResult] = useState<PublicVerificationResult | null>(null);
+  const [proofResult, setProofResult] = useState<ProofVerificationResult | null>(null);
+  const [proofContent, setProofContent] = useState('');
+  const [isProofDrop, setIsProofDrop] = useState(false);
+  const [privateResult, setPrivateResult] = useState<PrivateVerificationResult | null>(null);
+  const [isPrivateDrop, setIsPrivateDrop] = useState(false);
+  const [privateCommitment, setPrivateCommitment] = useState<{
+    hashDropId: string;
+    contentHash: string;
+    contentSize: number;
+    contentType: string;
+    version: string;
+    cryptoVersion: string;
+    keyFingerprint: string;
+    signature: string;
+    signer: string;
+  } | null>(null);
+  const [privateArtifactEnvelope, setPrivateArtifactEnvelope] = useState('');
+  const [privateSecretKey, setPrivateSecretKey] = useState('');
 
   const { publicKey, isConnected, connection } = useWallet();
 
-  // Sync network state from wallet hook
   useEffect(() => {
-    // Get network from wallet hook
     const updateNetwork = () => {
       const { getCurrentNetwork } = require('../../lib/network');
       setNetworkState(getCurrentNetwork());
     };
     updateNetwork();
-    
-    // Listen for storage changes (network selector updates)
-    const handleStorageChange = () => {
-      updateNetwork();
-    };
-    
+    const handleStorageChange = () => updateNetwork();
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
+  const resetResults = () => {
+    setPublicResult(null);
+    setProofResult(null);
+    setPrivateResult(null);
+    setPrivateCommitment(null);
+    setIsProofDrop(false);
+    setIsPrivateDrop(false);
+    setError(null);
+  };
+
   const handleVerify = useCallback(async () => {
-    let sig = signature;
-    
-    if (!sig) {
+    resetResults();
+    if (!signature.trim()) {
       setError('Please enter a transaction signature');
       return;
     }
-
-    // Validate signature format (Base58, 88+ characters for Solana tx)
-    if (!/^[1-9A-HJ-NP-Za-km-z]+$/.test(sig) || sig.length < 88) {
+    // Canonical validation: trim -> Base58 decode -> exactly 64 bytes.
+    // Network-independent (a 64-byte signature is 87 OR 88 Base58 chars, so a
+    // hard-coded textual length would wrongly reject real Mainnet signatures).
+    const normalizedSignature = normalizeTransactionSignature(signature);
+    if (!normalizedSignature) {
       setError('Invalid transaction signature format');
       return;
     }
-
     setStatus('FETCHING');
-    setError(null);
-
     try {
       const conn = connection || getConnection();
-      
-      // Stage 1: Fetching transaction
-      setStatus('FETCHING');
-      const verificationResult = await verifyBySignature(conn, sig, hashDropId || undefined);
-
-      if (verificationResult.verified) {
+      const result = await verifyBySignature(conn, normalizedSignature, hashDropId || undefined);
+      if (result.verified) {
         setStatus('VERIFIED');
-        setResult(verificationResult);
+        setPublicResult(result);
+      } else if (result.needsContent) {
+        if (result.mode === 'PRIVATE') {
+          setIsPrivateDrop(true);
+          setStatus('START');
+          setPrivateCommitment({
+            hashDropId: result.hashDropId,
+            contentHash: result.contentHash,
+            contentSize: result.contentSize,
+            contentType: result.contentType,
+            version: result.version || '',
+            cryptoVersion: result.cryptoVersion || '',
+            keyFingerprint: result.keyFingerprint || '',
+            signature: result.signature,
+            signer: result.signer || '',
+          });
+        } else {
+          setIsProofDrop(true);
+          setStatus('START');
+          setPublicResult(result);
+        }
       } else {
         setStatus('FAILED');
-        setError(verificationResult.error || 'Verification failed');
+        setError(result.error || 'Verification failed');
       }
     } catch (err) {
       setStatus('FAILED');
@@ -71,182 +118,460 @@ export default function Viewer() {
     }
   }, [signature, hashDropId, connection]);
 
-  const getExplorerLink = () => {
-    if (!result?.signature) return null;
-    return getExplorerUrl(result.signature);
-  };
+  const handleProofVerify = useCallback(async () => {
+    if (!proofContent) {
+      setError('Please enter the original content to verify');
+      return;
+    }
+    const normalizedSignature = normalizeTransactionSignature(signature);
+    if (!normalizedSignature) {
+      setError('Invalid transaction signature format');
+      setStatus('FAILED');
+      return;
+    }
+    setStatus('VERIFYING');
+    setError(null);
+    try {
+      const conn = connection || getConnection();
+      const result = await verifyProofDrop(conn, normalizedSignature, proofContent, hashDropId || undefined);
+      setProofResult(result);
+      setStatus(result.verified ? 'VERIFIED' : 'FAILED');
+      if (!result.verified && !error) {
+        setError(result.error || 'Proof verification failed');
+      }
+    } catch (err) {
+      setStatus('FAILED');
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    }
+  }, [signature, hashDropId, connection, proofContent, error]);
 
-  // Get network display based on state
-  const getNetworkDisplay = () => {
-    return network === 'mainnet' ? 'Mainnet (Beta)' : 'Devnet';
+  const handlePrivateVerify = useCallback(async () => {
+    if (!privateArtifactEnvelope || !privateSecretKey) {
+      setError('Please provide both the encrypted artifact and ML-KEM private key');
+      return;
+    }
+    const normalizedSignature = normalizeTransactionSignature(signature);
+    if (!normalizedSignature) {
+      setError('Invalid transaction signature format');
+      setStatus('FAILED');
+      return;
+    }
+    setStatus('VERIFYING');
+    setError(null);
+    try {
+      let secretKeyBytes: Uint8Array;
+      try {
+        secretKeyBytes = importSecretKey(privateSecretKey);
+      } catch {
+        setError('Invalid HashDrop ML-KEM-768 private key');
+        setStatus('FAILED');
+        return;
+      }
+      let artifact: ReturnType<typeof importArtifact>;
+      try {
+        artifact = importArtifact(privateArtifactEnvelope);
+      } catch {
+        setError('Invalid encrypted artifact format');
+        setStatus('FAILED');
+        return;
+      }
+      const conn = connection || getConnection();
+      const result = await verifyPrivateDrop(
+        conn, normalizedSignature, secretKeyBytes, artifact, artifact.mlKemCiphertext, hashDropId || undefined
+      );
+      setPrivateResult(result);
+      setStatus(result.verified ? 'VERIFIED' : 'FAILED');
+      if (!result.verified) {
+        setError(result.error || 'Private verification failed');
+      }
+    } catch (err) {
+      setStatus('FAILED');
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    }
+  }, [signature, hashDropId, connection, privateArtifactEnvelope, privateSecretKey]);
+
+  const handleKeyFileImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => setPrivateSecretKey((event.target?.result as string).trim());
+    reader.readAsText(file);
+  }, []);
+
+  const handleArtifactFileImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => setPrivateArtifactEnvelope((event.target?.result as string).trim());
+    reader.readAsText(file);
+  }, []);
+
+  const getExplorerLink = () => {
+    const normalized = normalizeTransactionSignature(signature);
+    return normalized ? getExplorerUrl(normalized) : null;
   };
 
   return (
-    <main className="flex-1 container mx-auto p-4 max-w-4xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2 text-accent">RETRIEVE HASHDROP</h1>
-        <p className="text-secondary">
-          Verify and retrieve on-chain content using HashDrop ID and transaction signature
-        </p>
-      </div>
+    <main className="min-h-screen bg-gray-950 text-primary p-4">
+      <div className="max-w-2xl mx-auto">
+        <h1 className="text-2xl font-bold mb-6 text-primary">Retrieve HashDrop</h1>
 
-      {/* Network Info */}
-      <section className="bg-gray-900 rounded-lg p-4 mb-6 border border-gray-700">
-        <h2 className="text-lg font-semibold mb-3 text-primary">Network</h2>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-secondary">Current:</span>
-          <span className="font-mono text-accent">{getNetworkDisplay()}</span>
-          {network === 'mainnet' && (
-            <span className="text-xs text-yellow-400 bg-yellow-900/30 px-2 py-1 rounded border border-yellow-600">
-              Mainnet
-            </span>
-          )}
-        </div>
-      </section>
-
-      {/* Retrieval Details Card */}
-      <section className="bg-gray-900 rounded-lg p-4 mb-6 border border-gray-700">
-        <h2 className="text-lg font-semibold mb-3 text-primary">Retrieval Details</h2>
-        
-        {/* HashDrop ID Input */}
-        <div className="mb-4">
-          <h3 className="text-sm font-medium text-secondary mb-2">HashDrop ID</h3>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              className="flex-1 bg-black text-primary font-mono p-2 rounded focus:outline-none focus:ring-2 focus:ring-accent text-xs w-full"
-              placeholder="Enter HashDrop ID (e.g., hd_b130a3a3_Amy4Tej8_b)..."
-              value={hashDropId}
-              onChange={(e) => setHashDropId(e.target.value)}
-            />
-          </div>
-        </div>
-
-        {/* Transaction Signature Input */}
-        <div className="mb-2">
-          <h3 className="text-sm font-medium text-secondary mb-2">Transaction Signature</h3>
-          <div className="flex flex-col gap-2 md:flex-row md:items-stretch">
-            <input
-              type="text"
-              className="flex-1 min-w-0 bg-black text-primary font-mono p-2 rounded focus:outline-none focus:ring-2 focus:ring-accent text-xs w-full"
-              placeholder="Enter transaction signature..."
-              value={signature}
-              onChange={(e) => setSignature(e.target.value)}
-            />
+        {/* Retrieval Details */}
+        <section className="bg-gray-900 rounded-lg p-4 mb-6 border border-gray-700">
+          <h2 className="text-lg font-semibold mb-3 text-primary">Retrieval Details</h2>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm text-secondary mb-1">Transaction Signature</label>
+              <input
+                className="w-full bg-black text-primary font-mono p-2 rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-accent text-sm"
+                placeholder="Enter Solana transaction signature..."
+                value={signature}
+                onChange={(e) => setSignature(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-secondary mb-1">HashDrop ID (optional)</label>
+              <input
+                className="w-full bg-black text-primary font-mono p-2 rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-accent text-sm"
+                placeholder="Enter HashDrop ID for additional validation..."
+                value={hashDropId}
+                onChange={(e) => setHashDropId(e.target.value)}
+              />
+            </div>
             <button
               onClick={handleVerify}
-              disabled={status === 'FETCHING' || status === 'VERIFYING' || !signature}
-              className="bg-accent text-white font-bold py-2 px-4 rounded hover:opacity-90 transition disabled:opacity-50 w-full md:w-auto md:shrink-0"
+              disabled={status === 'FETCHING' || status === 'VERIFYING'}
+              className="w-full bg-accent text-white font-bold py-2 px-4 rounded hover:opacity-90 transition disabled:opacity-50"
             >
-              {status === 'VERIFYING' ? 'Verifying...' : 'RETRIEVE'}
+              {status === 'FETCHING' ? 'Retrieving...' : 'RETRIEVE'}
             </button>
           </div>
-        </div>
-      </section>
-
-      {/* Loading State */}
-      {status === 'FETCHING' && (
-        <section className="bg-gray-900 rounded-lg p-4 mb-6 border border-gray-700">
-          <h2 className="text-lg font-semibold mb-3 text-primary">Loading...</h2>
-          <div className="text-sm text-secondary space-y-2">
-            <div>Fetching transaction...</div>
-            <div>Finding Memo...</div>
-            <div>Decoding V2 payload...</div>
-            <div>Verifying SHA-256...</div>
-          </div>
         </section>
-      )}
 
-      {/* Verification Result */}
-      {result && (
-        <>
-          <div className="bg-gray-900 rounded-lg p-4 mb-6 border border-gray-700">
-            <h2 className="text-xl font-bold text-green-400 mb-4">✅ VERIFIED</h2>
-            
+        {/* PUBLIC Drop Result */}
+        {publicResult && publicResult.verified && (
+          <section className="bg-gray-900 rounded-lg p-4 mb-6 border border-gray-700">
+            <h2 className="text-lg font-semibold mb-3 text-primary">Public Drop</h2>
             <div className="space-y-3">
+              <div className="text-green-400 font-bold">✓ VERIFIED</div>
               <div>
                 <div className="text-xs text-secondary mb-1">HashDrop ID</div>
-                <div className="font-mono text-xs text-accent break-all">{result.hashDropId}</div>
+                <div className="font-mono text-xs text-accent">{publicResult.hashDropId}</div>
               </div>
-              
-              <div>
-                <div className="text-xs text-secondary mb-1">Version</div>
-                <div className="text-accent">{result.version || 'v2'}</div>
-              </div>
-              
-              <div>
-                <div className="text-xs text-secondary mb-1">Type</div>
-                <div className="text-accent">{result.type || 'MEMO'}</div>
-              </div>
-              
-              <div>
-                <div className="text-xs text-secondary mb-1">Content</div>
-                <div className="bg-black p-2 rounded font-mono text-xs text-accent break-all">{result.content}</div>
-              </div>
-              
-              <div>
-                <div className="text-xs text-secondary mb-1">SHA-256</div>
-                <div className="font-mono text-xs text-accent break-all">{result.contentHash}</div>
-              </div>
-              
               <div>
                 <div className="text-xs text-secondary mb-1">MIME Type</div>
-                <div className="text-accent">{result.contentType}</div>
+                <div className="text-accent">{publicResult.contentType}</div>
               </div>
-              
               <div>
                 <div className="text-xs text-secondary mb-1">Content Size</div>
-                <div className="text-accent">{result.contentSize} bytes</div>
+                <div className="text-accent">{publicResult.contentSize} bytes</div>
               </div>
-              
               <div>
-                <div className="text-xs text-secondary mb-1">Transaction</div>
-                <div className="font-mono text-xs text-accent break-all">{result.signature}</div>
+                <div className="text-xs text-secondary mb-1">SHA-256</div>
+                <div className="font-mono text-xs text-accent break-all">{publicResult.contentHash}</div>
               </div>
-              
+              <div>
+                <div className="text-xs text-secondary mb-1">Content</div>
+                <div className="bg-black p-3 rounded font-mono text-sm text-accent whitespace-pre-wrap break-words">
+                  {publicResult.content}
+                </div>
+              </div>
+              {publicResult.signer && (
+                <div>
+                  <div className="text-xs text-secondary mb-1">Published By</div>
+                  <div className="font-mono text-xs text-accent break-all">{publicResult.signer}</div>
+                </div>
+              )}
+              <div>
+                <div className="text-xs text-secondary mb-1">Transaction Signature</div>
+                <div className="font-mono text-xs text-accent break-all">{publicResult.signature}</div>
+              </div>
               <div>
                 <div className="text-xs text-secondary mb-1">Network</div>
                 <div className="text-accent">{getNetworkDisplay()}</div>
               </div>
-              
+            </div>
+            {getExplorerLink() && (
+              <a href={getExplorerLink()!} target="_blank" rel="noopener noreferrer" className="inline-block mt-3 text-sm text-accent hover:text-accent/80">
+                View on Solana Explorer ↗
+              </a>
+            )}
+          </section>
+        )}
+
+        {/* PROOF Drop */}
+        {isProofDrop && !proofResult && (
+          <section className="bg-gray-900 rounded-lg p-4 mb-6 border border-gray-700">
+            <h2 className="text-lg font-semibold mb-3 text-primary">Proof Drop</h2>
+            <div className="bg-blue-900/30 border border-blue-600 rounded p-3 mb-4">
+              <div className="text-blue-300 font-bold mb-1">✓ ON-CHAIN COMMITMENT</div>
+              <p className="text-sm text-blue-300">
+                This HashDrop stores a cryptographic proof/timestamp.
+                The original content is not stored on-chain.
+              </p>
+              <p className="text-sm text-blue-300 mt-2">
+                To verify original content, provide the original content
+                separately and compare its SHA-256 hash with the
+                on-chain commitment.
+              </p>
+            </div>
+            {publicResult && (
+              <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
+                <div>
+                  <span className="text-secondary">HashDrop ID:</span>
+                  <div className="font-mono text-xs text-accent break-all">{publicResult.hashDropId}</div>
+                </div>
+                <div>
+                  <span className="text-secondary">Content Size:</span>
+                  <div className="text-accent">{publicResult.contentSize} bytes</div>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-secondary">SHA-256:</span>
+                  <div className="font-mono text-xs text-accent break-all">{publicResult.contentHash}</div>
+                </div>
+                {publicResult.signer && (
+                  <div className="col-span-2">
+                    <span className="text-secondary">Published By:</span>
+                    <div className="font-mono text-xs text-accent break-all">{publicResult.signer}</div>
+                  </div>
+                )}
+                <div className="col-span-2">
+                  <span className="text-secondary">Transaction Signature:</span>
+                  <div className="font-mono text-xs text-accent break-all">{publicResult.signature}</div>
+                </div>
+              </div>
+            )}
+            <div className="mb-3">
+              <label className="block text-sm text-secondary mb-1">Original Content</label>
+              <textarea
+                className="w-full h-32 bg-black text-primary font-mono p-2 rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-accent text-sm"
+                placeholder="Enter the original content to verify against the proof..."
+                value={proofContent}
+                onChange={(e) => setProofContent(e.target.value)}
+              />
+            </div>
+            <button
+              onClick={handleProofVerify}
+              disabled={status === 'VERIFYING' || !proofContent}
+              className="w-full bg-accent text-white font-bold py-2 px-4 rounded hover:opacity-90 transition disabled:opacity-50"
+            >
+              {status === 'VERIFYING' ? 'Verifying...' : 'VERIFY PROOF'}
+            </button>
+          </section>
+        )}
+
+        {/* PROOF Result */}
+        {proofResult && (
+          <section className={`bg-gray-900 rounded-lg p-4 mb-6 border ${proofResult.verified ? 'border-green-500' : 'border-red-500'}`}>
+            <h2 className="text-lg font-semibold mb-3 text-primary">
+              {proofResult.verified ? '✓ VERIFIED' : '✕ NOT VERIFIED'}
+            </h2>
+            <div className="space-y-3">
               <div>
-                <div className="text-xs text-secondary mb-1">Transaction Version</div>
-                <div className="text-accent">{result.transactionVersion || 'v0'}</div>
+                <div className="text-xs text-secondary mb-1">HashDrop ID</div>
+                <div className="font-mono text-xs text-accent break-all">{proofResult.hashDropId}</div>
+              </div>
+              <div>
+                <div className="text-xs text-secondary mb-1">On-chain SHA-256</div>
+                <div className="font-mono text-xs text-accent break-all">{proofResult.contentHash}</div>
+              </div>
+              <div>
+                <div className="text-xs text-secondary mb-1">Calculated SHA-256</div>
+                <div className="font-mono text-xs text-accent break-all">{proofResult.calculatedHash}</div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-xs text-secondary mb-1">On-chain Size</div>
+                  <div className="text-accent">{proofResult.contentSize} bytes</div>
+                </div>
+                <div>
+                  <div className="text-xs text-secondary mb-1">Calculated Size</div>
+                  <div className="text-accent">{proofResult.calculatedSize} bytes</div>
+                </div>
+              </div>
+              {proofResult.signer && (
+                <div>
+                  <div className="text-xs text-secondary mb-1">Published By</div>
+                  <div className="font-mono text-xs text-accent break-all">{proofResult.signer}</div>
+                </div>
+              )}
+              <div>
+                <div className="text-xs text-secondary mb-1">Transaction Signature</div>
+                <div className="font-mono text-xs text-accent break-all">{proofResult.signature}</div>
               </div>
             </div>
-          </div>
-          
-          {/* Explorer Link */}
-          {getExplorerLink() && (
-            <section className="bg-gray-900 rounded-lg p-4 mb-6 border border-gray-700">
-              <h2 className="text-lg font-semibold mb-3 text-primary">Explorer</h2>
-              <a 
-                href={getExplorerLink()!}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block text-sm text-accent hover:text-accent/80 transition break-all"
-              >
-                {getExplorerLink()!}
+            {getExplorerLink() && (
+              <a href={getExplorerLink()!} target="_blank" rel="noopener noreferrer" className="inline-block mt-3 text-sm text-accent hover:text-accent/80">
+                View on Solana Explorer ↗
               </a>
-            </section>
-          )}
-          
-          {/* Verification message */}
-          <div className="bg-gray-900 rounded-lg border border-accent border-opacity-30 mb-6">
-            <div className="text-green-400 text-sm font-medium p-3">
-              ✅ Content verified against on-chain SHA-256 hash
-            </div>
-          </div>
-        </>
-      )}
+            )}
+          </section>
+        )}
 
-      {/* Error State */}
-      {status === 'FAILED' && error && (
-        <section className="bg-gray-900 rounded-lg p-4 border border-gray-700 mb-6">
-          <h2 className="text-lg font-semibold mb-3 text-primary">❌ VERIFICATION FAILED</h2>
-          <p className="text-sm text-red-400">{error}</p>
+        {/* PRIVATE Drop */}
+        {isPrivateDrop && !privateResult?.verified && (
+          <section className="bg-gray-900 rounded-lg p-4 mb-6 border border-gray-700">
+            <h2 className="text-lg font-semibold mb-3 text-primary">🔐 Private Drop</h2>
+            <div className="bg-purple-900/30 border border-purple-600 rounded p-3 mb-4">
+              <p className="text-sm text-purple-300">
+                This transaction stores a cryptographic commitment
+                and encrypted key envelope.
+              </p>
+              <p className="text-sm text-purple-300 mt-2">
+                The encrypted content itself is NOT stored on-chain.
+                You must provide the encrypted artifact and your ML-KEM-768 private key to decrypt.
+              </p>
+            </div>
+            {privateCommitment && (
+              <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
+                <div>
+                  <span className="text-secondary">HashDrop ID:</span>
+                  <div className="font-mono text-xs text-accent break-all">{privateCommitment.hashDropId}</div>
+                </div>
+                <div>
+                  <span className="text-secondary">Content Size:</span>
+                  <div className="text-accent">{privateCommitment.contentSize} bytes</div>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-secondary">SHA-256:</span>
+                  <div className="font-mono text-xs text-accent break-all">{privateCommitment.contentHash}</div>
+                </div>
+                <div>
+                  <span className="text-secondary">MIME Type:</span>
+                  <div className="text-accent">{privateCommitment.contentType}</div>
+                </div>
+                <div>
+                  <span className="text-secondary">Crypto Version:</span>
+                  <div className="text-accent">{privateCommitment.cryptoVersion}</div>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-secondary">Key Fingerprint:</span>
+                  <div className="font-mono text-xs text-accent break-all">{privateCommitment.keyFingerprint}</div>
+                </div>
+                {privateCommitment.signer && (
+                  <div className="col-span-2">
+                    <span className="text-secondary">Published By:</span>
+                    <div className="font-mono text-xs text-accent break-all">{privateCommitment.signer}</div>
+                  </div>
+                )}
+                <div className="col-span-2">
+                  <span className="text-secondary">Transaction Signature:</span>
+                  <div className="font-mono text-xs text-accent break-all">{privateCommitment.signature}</div>
+                </div>
+              </div>
+            )}
+            <h3 className="text-md font-semibold mb-3 text-primary">Decryption</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm text-secondary mb-1">Encrypted Artifact</label>
+                <div className="flex gap-2">
+                  <textarea
+                    className="flex-1 h-24 bg-black text-primary font-mono p-2 rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-accent text-xs"
+                    placeholder="Paste artifact (HASHDROP-PRIVATE-BLOB|v1|...) or import file..."
+                    value={privateArtifactEnvelope}
+                    onChange={(e) => setPrivateArtifactEnvelope(e.target.value)}
+                  />
+                  <label className="cursor-pointer bg-gray-700 text-primary px-3 py-2 rounded hover:opacity-90 transition text-sm self-end">
+                    Import Artifact File
+                    <input type="file" className="hidden" onChange={handleArtifactFileImport} accept=".hdp,.txt,.json,application/octet-stream,text/plain" />
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm text-secondary mb-1">ML-KEM-768 Private Key</label>
+                <div className="flex gap-2">
+                  <textarea
+                    className="flex-1 h-24 bg-black text-primary font-mono p-2 rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-accent text-xs"
+                    placeholder="Paste private key (HASHDROP-KEY|v1|...) or import file..."
+                    value={privateSecretKey}
+                    onChange={(e) => setPrivateSecretKey(e.target.value)}
+                  />
+                  <label className="cursor-pointer bg-gray-700 text-primary px-3 py-2 rounded hover:opacity-90 transition text-sm self-end">
+                    Import Private Key File
+                    <input type="file" className="hidden" onChange={handleKeyFileImport} accept=".txt,.json" />
+                  </label>
+                </div>
+              </div>
+              <button
+                onClick={handlePrivateVerify}
+                disabled={status === 'VERIFYING' || !privateSecretKey || !privateArtifactEnvelope}
+                className="w-full bg-accent text-white font-bold py-2 px-4 rounded hover:opacity-90 transition disabled:opacity-50"
+              >
+                {status === 'VERIFYING' ? 'Decrypting...' : 'DECRYPT & VERIFY'}
+              </button>
+            </div>
+            {getExplorerLink() && (
+              <a href={getExplorerLink()!} target="_blank" rel="noopener noreferrer" className="inline-block mt-3 text-sm text-accent hover:text-accent/80">
+                View on Solana Explorer ↗
+              </a>
+            )}
+          </section>
+        )}
+
+        {/* PRIVATE Result */}
+        {privateResult && privateResult.verified && (
+          <section className="bg-gray-900 rounded-lg p-4 mb-6 border border-green-500">
+            <h2 className="text-lg font-semibold mb-3 text-primary">🔐 Private Drop — Decrypted</h2>
+            <div className="space-y-3">
+              <div className="text-green-400 font-bold">✓ DECRYPTED & VERIFIED</div>
+              <div>
+                <div className="text-xs text-secondary mb-1">HashDrop ID</div>
+                <div className="font-mono text-xs text-accent break-all">{privateResult.hashDropId}</div>
+              </div>
+              {privateResult.signer && (
+                <div>
+                  <div className="text-xs text-secondary mb-1">Published By</div>
+                  <div className="font-mono text-xs text-accent break-all">{privateResult.signer}</div>
+                </div>
+              )}
+              <div>
+                <div className="text-xs text-secondary mb-1">On-chain SHA-256</div>
+                <div className="font-mono text-xs text-accent break-all">{privateResult.contentHash}</div>
+              </div>
+              <div>
+                <div className="text-xs text-secondary mb-1">Calculated SHA-256</div>
+                <div className="font-mono text-xs text-accent break-all">{privateResult.calculatedHash}</div>
+              </div>
+              {privateResult.plaintext && (
+                <div>
+                  <div className="text-xs text-secondary mb-1">Decrypted Content</div>
+                  <div className="bg-black p-3 rounded font-mono text-sm text-accent whitespace-pre-wrap break-words">
+                    {privateResult.plaintext}
+                  </div>
+                </div>
+              )}
+              <div>
+                <div className="text-xs text-secondary mb-1">Crypto</div>
+                <div className="text-accent">AES-256-GCM + ML-KEM-768 + HKDF-SHA-256</div>
+              </div>
+              <div>
+                <div className="text-xs text-secondary mb-1">Transaction Signature</div>
+                <div className="font-mono text-xs text-accent break-all">{privateResult.signature}</div>
+              </div>
+            </div>
+            {getExplorerLink() && (
+              <a href={getExplorerLink()!} target="_blank" rel="noopener noreferrer" className="inline-block mt-3 text-sm text-accent hover:text-accent/80">
+                View on Solana Explorer ↗
+              </a>
+            )}
+          </section>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <section className="bg-gray-900 rounded-lg p-4 border border-gray-700 mb-6">
+            <h2 className="text-lg font-semibold mb-3 text-primary">❌ VERIFICATION FAILED</h2>
+            <p className="text-sm text-red-400">{error}</p>
+          </section>
+        )}
+
+        {/* Navigation */}
+        <section className="mt-8 pt-4 border-t border-gray-700">
+          <a href="/" className="inline-block text-sm text-accent hover:text-accent/80 transition">
+            ← Publish HashDrop
+          </a>
         </section>
-      )}
+      </div>
     </main>
   );
 }
