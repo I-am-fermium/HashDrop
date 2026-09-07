@@ -463,46 +463,46 @@ export default function Home() {
       {/* Mode Selector */}
       <section className="bg-gray-900 rounded-lg p-4 mb-6 border border-gray-700">
         <h2 className="text-lg font-semibold mb-3 text-primary">Mode</h2>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
           <button
             type="button"
             onClick={() => setMode('public')}
-            className={`p-3 rounded border text-left transition ${
+            className={`p-2 sm:p-3 rounded border text-left transition ${
               mode === 'public'
                 ? 'border-accent bg-accent/10'
                 : 'border-gray-700 bg-black hover:border-gray-500'
             }`}
           >
-            <div className="font-medium text-primary">Public</div>
-            <div className="text-xs text-secondary mt-1">
+            <div className="text-sm sm:text-base font-medium text-primary break-words">Public</div>
+            <div className="text-xs text-secondary mt-1 break-words hyphens-auto">
               Publish the content publicly on Solana.
             </div>
           </button>
           <button
             type="button"
             onClick={() => setMode('proof')}
-            className={`p-3 rounded border text-left transition ${
+            className={`p-2 sm:p-3 rounded border text-left transition ${
               mode === 'proof'
                 ? 'border-accent bg-accent/10'
                 : 'border-gray-700 bg-black hover:border-gray-500'
             }`}
           >
-            <div className="font-medium text-primary">Proof</div>
-            <div className="text-xs text-secondary mt-1">
+            <div className="text-sm sm:text-base font-medium text-primary break-words">Proof</div>
+            <div className="text-xs text-secondary mt-1 break-words hyphens-auto">
               Timestamp/prove without publishing content.
             </div>
           </button>
           <button
             type="button"
             onClick={() => setMode('private')}
-            className={`p-3 rounded border text-left transition ${
+            className={`p-2 sm:p-3 rounded border text-left transition ${
               mode === 'private'
                 ? 'border-accent bg-accent/10'
                 : 'border-gray-700 bg-black hover:border-gray-500'
             }`}
           >
-            <div className="font-medium text-primary">Private</div>
-            <div className="text-xs text-secondary mt-1">
+            <div className="text-sm sm:text-base font-medium text-primary break-words">Private</div>
+            <div className="text-xs text-secondary mt-1 break-words hyphens-auto">
               Encrypt content locally before publishing.
             </div>
           </button>
