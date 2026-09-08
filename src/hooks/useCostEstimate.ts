@@ -5,7 +5,7 @@
  * Uses network-authoritative pricing from Solana RPC.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { HASHDROP_PLATFORM_FEE_LAMPORTS } from '../lib/constants';
 import { lamportsToSol, getConnection } from '../lib/solana/networkCost';
 
@@ -31,18 +31,8 @@ export interface CostEstimate {
  * Note: exceedsMaxSize is now determined by actual transaction serialization
  */
 export function useCostEstimate(content: string) {
-  const [estimate, setEstimate] = useState<CostEstimate>({
-    contentSize: 0,
-    protocolFeeLamports: 0,
-    protocolFeeSol: 0,
-    totalLamports: 0,
-    totalSol: 0,
-    networkFeeLamports: 0,
-    networkFeeSol: 0,
-    totalWithNetworkFeeLamports: 0,
-    totalWithNetworkFeeSol: 0,
-    exceedsMaxSize: false,
-  });
+  // `estimate` is derived during render from the pure `calculate` function
+  // (no setState-in-effect), so it always reflects the current content.
 
   const calculate = useCallback((text: string): CostEstimate => {
     const contentSize = new TextEncoder().encode(text).length;
@@ -80,9 +70,7 @@ export function useCostEstimate(content: string) {
     };
   }, []);
 
-  useEffect(() => {
-    setEstimate(calculate(content));
-  }, [content, calculate]);
+  const estimate = useMemo(() => calculate(content), [calculate, content]);
 
   return { estimate, calculate };
 }

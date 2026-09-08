@@ -9,7 +9,7 @@ import {
   encodePublicPayload,
   encodeProofPayload,
   decodeHashDropPayload,
-  HASHDROP_VERSION,
+  HASHDROP_PROTOCOL_VERSION,
 } from './memo';
 
 describe('V3 PRIVATE Mode Protocol', () => {
@@ -132,7 +132,7 @@ describe('V3 PRIVATE Mode Protocol', () => {
 
   describe('protocol version', () => {
     it('should have correct version', () => {
-      expect(HASHDROP_VERSION).toBe('v3');
+      expect(HASHDROP_PROTOCOL_VERSION).toBe('v3');
     });
   });
 });

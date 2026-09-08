@@ -99,8 +99,7 @@ Every protocol bug fixed should receive a regression test where practical.
 - ✅ Unicode content → Correct UTF-8
 - ✅ Emoji content → Preserved
 - ✅ SHA-256 verification → PASS
-- ✅ Legacy V2 retrieval → PASS
-- ✅ v0 V2 retrieval → PASS
+- ✅ Legacy V2 payloads → rejected (V2 retrieval removed in V3; regression-tested in verification.test.ts)
 
 ### v1 Transaction Tests (Ready)
 - ⏳ 100-byte content → Publish
@@ -114,9 +113,7 @@ Every protocol bug fixed should receive a regression test where practical.
 - ⏳ Unicode content → Correct UTF-8
 - ⏳ Emoji content → Preserved
 - ⏳ SHA-256 verification → PASS
-- ⏳ Legacy V2 retrieval → PASS
-- ⏳ v0 V2 retrieval → PASS
-- ⏳ v1 V2 retrieval → PASS
+- ⏳ Legacy V2 payloads → rejected on v1 transactions (V2 remains unsupported)
 
 ### Platform Fee Tests (✅ Implemented)
 - ✅ `SystemProgram.transfer` instruction exists in the publish transaction

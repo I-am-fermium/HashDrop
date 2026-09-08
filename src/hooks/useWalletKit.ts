@@ -54,13 +54,13 @@ export function useWalletKit(): UseWalletResult {
 
   // Initialize connection and network
   useEffect(() => {
+    const currentNetwork = getCurrentNetwork();
     const conn = createConnection();
     console.log('[HashDrop] Connection initialized:', {
-      network,
+      network: currentNetwork,
       rpc: getRpcUrlForLogging(),
     });
     setConnection(conn);
-    const currentNetwork = getCurrentNetwork();
     setNetworkState(currentNetwork);
   }, []);
 

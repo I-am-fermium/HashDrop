@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useSyncExternalStore } from 'react';
 import { Network, getCurrentNetwork, setCurrentNetwork, isMainnet } from '../lib/network';
 
 interface NetworkSelectorProps {
@@ -9,11 +9,13 @@ interface NetworkSelectorProps {
 }
 
 export function NetworkSelector({ currentNetwork, onNetworkChange }: NetworkSelectorProps) {
-  const [isClient, setIsClient] = useState(false);
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
+  // Hydration marker without setState-in-effect: false during SSR and the
+  // hydration render, true afterwards (canonical useSyncExternalStore pattern).
+  const isClient = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
 
   const handleNetworkChange = (network: Network) => {
     if (network !== currentNetwork) {

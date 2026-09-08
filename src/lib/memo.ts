@@ -11,13 +11,11 @@
  * The protocol uses the Solana SPL Memo program to store payloads.
  */
 
-import { utf8ToBase64 } from './encoding';
-
 // Canonical SPL Memo program ID
 export const MEMO_PROGRAM_ID = 'Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH';
 
-// HashDrop protocol version
-export const HASHDROP_VERSION = 'v3';
+// HashDrop wire/protocol version — serialized in every payload as "HASHDROP|v3|…"
+export const HASHDROP_PROTOCOL_VERSION = 'v3';
 
 // Private mode cryptographic construction version
 // HD-P1 = AES-256-GCM + ML-KEM-768 + HKDF-SHA-256, version 1
@@ -25,10 +23,6 @@ export const HASHDROP_PRIVATE_CRYPTO_VERSION = 'HD-P1';
 
 // Supported protocol modes
 export type HashDropMode = 'PUBLIC' | 'PROOF' | 'PRIVATE';
-
-// Transaction size limits
-export const LEGACY_TRANSACTION_MAX_BYTES = 1232;
-export const V1_TRANSACTION_MAX_BYTES = 4096;
 
 // Public payload format: HASHDROP|v3|PUBLIC|hashDropId|sha256|mimeType|contentSize|base64Content
 export interface PublicPayload {
@@ -317,139 +311,4 @@ export function decodeHashDropPayload(memo: string): PublicPayload | ProofPayloa
   }
 
   return null;
-}
-
-/**
- * Get the memo program public key (as string for serialization)
- */
-export function getMemoProgramId(): string {
-  return MEMO_PROGRAM_ID;
-}
-
-/**
- * Encode string to base64 (handles unicode properly)
- * Uses the centralized UTF-8-safe encoding utility
- */
-export function encodeBase64(str: string): string {
-  return utf8ToBase64(str);
-}
-
-/**
- * Check if content fits within memo size limits for v1 transactions (4096 bytes)
- * @param content - The content to check
- * @returns true if content fits within the transaction limits
- */
-export function canFitInMemo(content: string): boolean {
-  const bytes = new TextEncoder().encode(content);
-  const maxBytes = V1_TRANSACTION_MAX_BYTES;
-  
-  // Calculate the memo payload size
-  const base64Content = encodeBase64(content);
-  const hashDropId = 'hd_test';
-  const contentHash = '0'.repeat(64);
-  const contentType = 'text/plain';
-  const contentSize = bytes.length;
-
-  const memoPayload = encodePublicPayload(
-    hashDropId,
-    contentHash,
-    contentType,
-    contentSize,
-    base64Content
-  );
-
-  const memoBytes = new TextEncoder().encode(memoPayload).length;
-
-  // Transaction overhead for v1 transactions:
-  // - Message header: ~4 bytes
-  // - Account keys: ~32 bytes each (at least one for fee payer)
-  // - Instructions: ~6 bytes + memo length
-  // - Signature: ~64 bytes
-  // Total overhead: ~176 bytes
-  const TRANSACTION_OVERHEAD = 176;
-  const totalTransactionSize = memoBytes + TRANSACTION_OVERHEAD;
-
-  return totalTransactionSize <= maxBytes;
-}
-
-/**
- * Get the maximum content size that can fit in a v1 transaction
- * @returns Maximum content size in bytes
- */
-export function getMaxContentSize(): number {
-  const TRANSACTION_OVERHEAD = 176;
-  return V1_TRANSACTION_MAX_BYTES - TRANSACTION_OVERHEAD;
-}
-
-/**
- * Get the maximum size of serialized transaction for a given memo payload
- * This accounts for transaction overhead (signatures, account keys, etc.)
- */
-export function getSerializedTransactionSize(memoBytes: number): number {
-  // Transaction overhead includes:
-  // - Message header: ~4 bytes
-  // - Account keys: ~32 bytes each (at least one for fee payer)
-  // - Instruction: ~4 bytes + memo length
-  // - Signatures: ~64 bytes each
-  //
-  // For a memo-only transaction:
-  // - 1 account key (fee payer): 32 bytes
-  // - Message header: ~4 bytes
-  // - Instructions (memo): ~6 + memoBytes
-  // - Signature: ~64 bytes
-  //
-  // Approximate overhead: ~112 bytes + 64 bytes signature = ~176 bytes
-  const TRANSACTION_OVERHEAD = 176;
-  return memoBytes + TRANSACTION_OVERHEAD;
-}
-
-/**
- * Validate that a transaction with the given memo will fit within v1 limits (4096 bytes)
- */
-export function canSerializeTransaction(memoContent: string): boolean {
-  const maxBytes = V1_TRANSACTION_MAX_BYTES;
-  const memoBytes = new TextEncoder().encode(memoContent).length;
-  const totalSize = getSerializedTransactionSize(memoBytes);
-  return totalSize <= maxBytes;
-}
-
-/**
- * Calculate the actual transaction size for a given content
- * Returns the total transaction size in bytes
- */
-export function calculateTransactionSize(content: string): {
-  contentBytes: number;
-  memoPayloadBytes: number;
-  transactionBytes: number;
-  maxTransactionBytes: number;
-  availableBytes: number;
-} {
-  const contentBytes = new TextEncoder().encode(content).length;
-  const base64Content = encodeBase64(content);
-  const hashDropId = 'hd_test';
-  const contentHash = '0'.repeat(64);
-  const contentType = 'text/plain';
-
-  const memoPayload = encodePublicPayload(
-    hashDropId,
-    contentHash,
-    contentType,
-    contentBytes,
-    base64Content
-  );
-  
-  const memoPayloadBytes = new TextEncoder().encode(memoPayload).length;
-  // Transaction overhead for v1 transactions: ~176 bytes
-  const TRANSACTION_OVERHEAD = 176;
-  const transactionBytes = memoPayloadBytes + TRANSACTION_OVERHEAD;
-  const maxBytes = V1_TRANSACTION_MAX_BYTES;
-  const availableBytes = maxBytes - transactionBytes;
-  
-  return {
-    contentBytes,
-    memoPayloadBytes,
-    transactionBytes,
-    maxTransactionBytes: maxBytes,
-    availableBytes,
-  };
 }

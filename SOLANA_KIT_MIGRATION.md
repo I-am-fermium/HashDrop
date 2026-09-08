@@ -27,14 +27,13 @@
 - `TransactionInstruction`
 
 **Current Transaction Flow:**
-1. `usePublish.ts` → `buildMemoDropTransaction()` → `buildV0Transaction()` or `buildV1Transaction()`
-2. `transactions.ts` → `buildMemoDropTransaction()` → detects SDK capabilities
-3. `transactionCapabilities.ts` → `sdkSupportsV1()` → checks for `compileToV1Message()` method
-4. Currently builds v0 transactions (SDK does not support v1 yet)
+1. `src/app/page.tsx` → `buildPublicTransaction()` / `buildProofDropTransaction()` / `buildPrivateTransaction()`
+2. `transactions.ts` → each mode builder encodes its V3 payload, then calls `buildV1Transaction()`
+3. `buildV1Transaction()` → platform-fee transfer + SPL Memo instruction → `compileToV0Message()` (v0)
+4. `transactionCapabilities.ts` → `sdkSupportsV1()` → checks for `compileToV1Message()` method (future v1 upgrade path)
 
 **Key Files:**
-- `src/hooks/useWallet.ts` - Wallet connection via `window.solana` (Phantom/Brave)
-- `src/hooks/usePublish.ts` - Memo Drop publishing
+- `src/hooks/useWallet.ts` - Wallet connection via `window.solana` (Phantom/Brave) and transaction signing/submission
 - `src/lib/transactions.ts` - Transaction builders
 - `src/lib/verification.ts` - On-chain content verification
 - `src/lib/solana/networkCost.ts` - Network cost calculation
@@ -88,9 +87,16 @@
 **Program ID:**
 - `Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH`
 
-**Payload Format (V2):**
+**Payload Format (V2 — historical, superseded by V3):**
 ```
 HASHDROP|v2|MEMO|<hashDropId>|<sha256>|<mimeType>|<length>|<base64Content>
+```
+
+**Current Payload Format (V3):**
+```
+HASHDROP|v3|PUBLIC|<hashDropId>|<sha256>|<mimeType>|<contentSize>|<base64Content>
+HASHDROP|v3|PROOF|<hashDropId>|<sha256>|<contentSize>
+HASHDROP|v3|PRIVATE|<hashDropId>|<sha256>|<contentSize>|<mimeType>|<cryptoVersion>|<keyFingerprint>|<encryptedKeyIv>|<encryptedKey>
 ```
 
 ### Current Transaction Size Limits

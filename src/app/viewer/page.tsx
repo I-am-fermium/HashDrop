@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import Link from 'next/link';
 import { useWallet } from '../../hooks/useWallet';
 import {
   verifyBySignature,
@@ -567,9 +568,9 @@ export default function Viewer() {
 
         {/* Navigation */}
         <section className="mt-8 pt-4 border-t border-gray-700">
-          <a href="/" className="inline-block text-sm text-accent hover:text-accent/80 transition">
+          <Link href="/" className="inline-block text-sm text-accent hover:text-accent/80 transition">
             ← Publish HashDrop
-          </a>
+          </Link>
         </section>
       </div>
     </main>

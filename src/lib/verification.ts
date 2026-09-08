@@ -9,7 +9,7 @@
 import { Connection, PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js';
 import * as bs58 from 'bs58';
 import { calculateHash, stringToBytes } from './content';
-import { decodePublicPayload, decodeProofPayload, decodePrivatePayload, isValidPublicPayload, isValidProofPayload, isValidPrivatePayload, MEMO_PROGRAM_ID, HASHDROP_VERSION, ProofPayload, PublicPayload, PrivatePayload } from './memo';
+import { decodePublicPayload, decodeProofPayload, decodePrivatePayload, isValidPublicPayload, isValidProofPayload, isValidPrivatePayload, MEMO_PROGRAM_ID, HASHDROP_PROTOCOL_VERSION, ProofPayload, PublicPayload, PrivatePayload } from './memo';
 import { base64ToUtf8, utf8ToBytes, base64ToBytes } from './encoding';
 import { getNetworkDisplay, getCurrentNetwork } from './network';
 
@@ -447,7 +447,7 @@ export async function verifyPublicDrop(
         signature,
         signer,
         error: 'Invalid HashDrop payload. This transaction does not contain a valid V3 PUBLIC, PROOF, or PRIVATE payload.',
-        version: HASHDROP_VERSION,
+        version: HASHDROP_PROTOCOL_VERSION,
       };
     }
 
@@ -465,7 +465,7 @@ export async function verifyPublicDrop(
         signature,
         signer,
         error: 'Invalid HashDrop V3 PUBLIC payload.',
-        version: HASHDROP_VERSION,
+        version: HASHDROP_PROTOCOL_VERSION,
         mode: 'PUBLIC',
       };
     }
@@ -637,7 +637,7 @@ export async function verifyProofDrop(
         calculatedSize: 0,
         signature,
         error: 'Transaction not found.',
-        version: HASHDROP_VERSION,
+        version: HASHDROP_PROTOCOL_VERSION,
         mode: 'PROOF',
       };
     }
@@ -668,7 +668,7 @@ export async function verifyProofDrop(
         calculatedSize: 0,
         signature,
         error: 'No instructions found in transaction.',
-        version: HASHDROP_VERSION,
+        version: HASHDROP_PROTOCOL_VERSION,
         mode: 'PROOF',
       };
     }
@@ -721,7 +721,7 @@ export async function verifyProofDrop(
         calculatedSize: 0,
         signature,
         error: 'No HashDrop Memo found in this transaction.',
-        version: HASHDROP_VERSION,
+        version: HASHDROP_PROTOCOL_VERSION,
         mode: 'PROOF',
       };
     }
@@ -742,7 +742,7 @@ export async function verifyProofDrop(
         calculatedSize: 0,
         signature,
         error: 'Not a valid HashDrop Proof Drop.',
-        version: HASHDROP_VERSION,
+        version: HASHDROP_PROTOCOL_VERSION,
         mode: 'PROOF',
       };
     }
@@ -759,7 +759,7 @@ export async function verifyProofDrop(
         calculatedSize: 0,
         signature,
         error: 'Invalid HashDrop V3 Proof payload.',
-        version: HASHDROP_VERSION,
+        version: HASHDROP_PROTOCOL_VERSION,
         mode: 'PROOF',
       };
     }
@@ -850,7 +850,7 @@ export async function verifyProofDrop(
       calculatedSize: 0,
       signature,
       error: error instanceof Error ? error.message : 'Unknown error during proof verification.',
-      version: HASHDROP_VERSION,
+      version: HASHDROP_PROTOCOL_VERSION,
       mode: 'PROOF',
     };
   }
@@ -919,7 +919,7 @@ export async function verifyPrivateDrop(
         plaintext: null,
         signature,
         error: 'Transaction not found.',
-        version: HASHDROP_VERSION,
+        version: HASHDROP_PROTOCOL_VERSION,
         mode: 'PRIVATE',
       };
     }
@@ -952,7 +952,7 @@ export async function verifyPrivateDrop(
         plaintext: null,
         signature,
         error: 'No instructions found in transaction.',
-        version: HASHDROP_VERSION,
+        version: HASHDROP_PROTOCOL_VERSION,
         mode: 'PRIVATE',
       };
     }
@@ -1006,7 +1006,7 @@ export async function verifyPrivateDrop(
         plaintext: null,
         signature,
         error: 'No HashDrop Memo found in this transaction.',
-        version: HASHDROP_VERSION,
+        version: HASHDROP_PROTOCOL_VERSION,
         mode: 'PRIVATE',
       };
     }
@@ -1026,7 +1026,7 @@ export async function verifyPrivateDrop(
         plaintext: null,
         signature,
         error: 'Not a valid HashDrop Private Drop.',
-        version: HASHDROP_VERSION,
+        version: HASHDROP_PROTOCOL_VERSION,
         mode: 'PRIVATE',
       };
     }
@@ -1045,7 +1045,7 @@ export async function verifyPrivateDrop(
         plaintext: null,
         signature,
         error: 'Invalid HashDrop V3 PRIVATE payload.',
-        version: HASHDROP_VERSION,
+        version: HASHDROP_PROTOCOL_VERSION,
         mode: 'PRIVATE',
       };
     }
@@ -1174,7 +1174,7 @@ export async function verifyPrivateDrop(
       plaintext: null,
       signature,
       error: error instanceof Error ? error.message : 'Unknown error during private verification.',
-      version: HASHDROP_VERSION,
+      version: HASHDROP_PROTOCOL_VERSION,
       mode: 'PRIVATE',
     };
   }

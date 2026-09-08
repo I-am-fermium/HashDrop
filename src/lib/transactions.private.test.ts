@@ -9,7 +9,8 @@
 
 import { PublicKey } from '@solana/web3.js';
 import { buildV1Transaction, serializeTransaction } from './transactions';
-import { encodePrivatePayload, LEGACY_TRANSACTION_MAX_BYTES } from './memo';
+import { encodePrivatePayload } from './memo';
+import { LEGACY_TRANSACTION_MAX_BYTES } from './solana/transactionCapabilities';
 
 // Jest (jsdom) cross-realm alignment for @solana/web3.js instruction encoding:
 // web3.js encodes instruction data with Node's Buffer (Buffer.alloc), and

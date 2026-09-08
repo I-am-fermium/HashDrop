@@ -113,8 +113,3 @@ export async function processContent(content: string, creator: string): Promise<
     hashDropId,
   };
 }
-
-/**
- * HashDrop version for protocol identification
- */
-export const HASHDROP_VERSION = 1;

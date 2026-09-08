@@ -1,12 +1,17 @@
 /**
  * HashDrop Transaction Builder
- * 
- * Provides transaction construction for Memo Drop using v1 transactions only.
- * Supports 4096-byte transactions using Solana web3.js.
- * 
- * v1 Transaction Support:
- * - Uses Solana web3.js TransactionMessage for v1
- * - 4096 bytes max transaction size
+ *
+ * Assembles HashDrop Protocol V3 payloads (PUBLIC / PROOF / PRIVATE memo
+ * payloads from ./memo) into Solana transactions with the platform-fee
+ * transfer instruction.
+ *
+ * Solana transaction version (container only — HashDrop Protocol V3 is
+ * independent of it):
+ * - Current:  compiles to a Solana V0 message (compileToV0Message) —
+ *             VersionedTransaction, 1232-byte packet ceiling.
+ * - Future:   Solana V1 / 4096-byte ceiling, once SDK + wallet support exist.
+ *             buildV1Transaction() is intentionally retained (name unchanged)
+ *             as the transaction assembly / V1 migration boundary.
  */
 
 import { PublicKey, SystemProgram, VersionedTransaction, TransactionMessage, TransactionInstruction, Connection } from '@solana/web3.js';
@@ -15,22 +20,18 @@ import { encodePublicPayload, encodeProofPayload, encodePrivatePayload, MEMO_PRO
 import { utf8ToBase64 } from './encoding';
 import {
   detectTransactionCapabilities as _detectTransactionCapabilities,
-  SolanaTransactionCapabilities,
-  TransactionVersionType,
-  V1_TRANSACTION_MAX_BYTES,
+  LEGACY_TRANSACTION_MAX_BYTES,
 } from './solana/transactionCapabilities';
 import { getRpcUrl, getCurrentNetwork, Network, createRpc } from './network';
 
 // Re-export for use by other modules
 export { _detectTransactionCapabilities as detectTransactionCapabilities };
 
-// Transaction size limits
-export const V1_TRANSACTION_MAX_BYTES_CONST = 4096;
-
 /**
- * Build a Public Mode transaction using v1 format
+ * Build a Public Mode transaction
  * Creates a transaction with an SPL Memo instruction containing the V3 PUBLIC payload
- * Uses v1 format (VersionedTransaction with MessageV0) - 4096 bytes max
+ * (HashDrop Protocol V3) plus the platform-fee transfer instruction.
+ * Compiled to a Solana V0 message (VersionedTransaction) — 1232-byte packet ceiling.
  */
 export async function buildPublicTransaction(
   content: string,
@@ -88,7 +89,7 @@ export async function buildPublicTransaction(
     base64Content
   );
   
-  // Build v1 transaction using web3.js native API
+  // Assemble the transaction via the shared boundary (currently compiles to Solana v0)
   const transaction = buildV1Transaction(
     memoPayload,
     address,
@@ -96,14 +97,15 @@ export async function buildPublicTransaction(
     lastValidBlockHeight
   );
   
-  console.log('[HashDrop] Built v1 transaction');
+  console.log('[HashDrop] Built transaction (Solana v0)');
   return transaction;
 }
 
 /**
- * Build a Proof Mode transaction using v1 format
+ * Build a Proof Mode transaction
  * Creates a transaction with a memo instruction containing the V3 PROOF payload
- * Uses v1 format (VersionedTransaction with MessageV0) - 4096 bytes max
+ * (HashDrop Protocol V3) plus the platform-fee transfer instruction.
+ * Compiled to a Solana V0 message (VersionedTransaction) — 1232-byte packet ceiling.
  *
  * The original content is NEVER stored on-chain. Only the SHA-256 commitment
  * and the original byte length are published. The transaction includes the
@@ -158,7 +160,7 @@ export async function buildProofDropTransaction(
     contentSize
   );
 
-  // Build v1 transaction using web3.js native API
+  // Assemble the transaction via the shared boundary (currently compiles to Solana v0)
   const transaction = buildV1Transaction(
     memoPayload,
     address,
@@ -166,14 +168,15 @@ export async function buildProofDropTransaction(
     lastValidBlockHeight
   );
 
-  console.log('[HashDrop] Built v1 proof transaction');
+  console.log('[HashDrop] Built proof transaction (Solana v0)');
   return transaction;
 }
 
 /**
- * Build a Private Mode transaction using v1 format
+ * Build a Private Mode transaction
  * Creates a transaction with an SPL Memo instruction containing the V3 PRIVATE payload
- * Uses v1 format (VersionedTransaction with MessageV0) - 4096 bytes max
+ * (HashDrop Protocol V3) plus the platform-fee transfer instruction.
+ * Compiled to a Solana V0 message (VersionedTransaction) — 1232-byte packet ceiling.
  *
  * The original content is NEVER stored on-chain. Only the encrypted ciphertext,
  * ML-KEM encapsulated key, and metadata are published. The transaction includes
@@ -247,7 +250,7 @@ export async function buildPrivateTransaction(
     encryptedKeyBase64
   );
 
-  // Build v1 transaction using web3.js native API
+  // Assemble the transaction via the shared boundary (currently compiles to Solana v0)
   const transaction = buildV1Transaction(
     memoPayload,
     address,
@@ -255,16 +258,24 @@ export async function buildPrivateTransaction(
     lastValidBlockHeight
   );
 
-  console.log('[HashDrop] Built v1 private transaction');
+  console.log('[HashDrop] Built private transaction (Solana v0)');
   return transaction;
 }
 
 /**
- * Build a v1 transaction using Solana web3.js native API
- * Supports up to 4096 bytes
+ * Transaction assembly / Solana version migration boundary.
  *
- * NOTE: Despite the "V1" name, this currently compiles to a V0 message
- * (compileToV0Message) for Phantom compatibility.
+ * Assembles the HashDrop transaction (platform-fee transfer + SPL Memo) from a
+ * prepared V3 payload and compiles it to its wire format.
+ *
+ * HashDrop Protocol V3 is independent of the Solana transaction version.
+ * - Current implementation: compiles to a Solana V0 message
+ *   (compileToV0Message) — VersionedTransaction, 1232-byte packet ceiling.
+ * - Future target: compile to Solana V1 — 4096-byte ceiling — once SDK and
+ *   wallet support exist. V1 is NOT enabled today.
+ *
+ * The name buildV1Transaction() is intentionally retained as the migration
+ * boundary; do not rename it to reflect the current wire format.
  *
  * The transaction includes the HashDrop platform-fee transfer
  * (SystemProgram.transfer → HASHDROP_FEE_WALLET) as the first instruction,
@@ -326,6 +337,57 @@ export function buildV1Transaction(
   return versionedTransaction;
 }
 
+// Fixed dummy blockhash used ONLY for size measurement. A blockhash is always
+// encoded as exactly 32 bytes in the compiled message regardless of its value,
+// so it does not affect the measured serialized size.
+const SIZE_PREVIEW_BLOCKHASH = '11111111111111111111111111111111';
+
+/**
+ * Measure the exact serialized size of the Public Mode transaction for the
+ * given content, using the SAME encoding and compilation path as
+ * buildPublicTransaction (V3 PUBLIC memo with the base64-encoded content,
+ * plus the platform-fee transfer, compiled to a v0 message). No RPC is
+ * required — the blockhash value does not affect serialized size.
+ *
+ * Returns the exact byte count the real publish flow would submit, or null
+ * when the transaction cannot be serialized because it exceeds the legacy
+ * packet limit (the same rejection the real publish flow hits).
+ */
+export function measurePublicTransactionSize(
+  content: string,
+  hashDropId: string,
+  contentHash: string,
+  contentType: string,
+  contentSize: number,
+  feePayer: string
+): { size: number | null; maxBytes: number } {
+  // Encode content as base64 for V3 Public format (UTF-8 safe) — identical to
+  // the encoding performed inside buildPublicTransaction.
+  const base64Content = utf8ToBase64(content);
+
+  const memoPayload = encodePublicPayload(
+    hashDropId,
+    contentHash,
+    contentType,
+    contentSize,
+    base64Content
+  );
+
+  try {
+    const transaction = buildV1Transaction(
+      memoPayload,
+      feePayer,
+      SIZE_PREVIEW_BLOCKHASH,
+      BigInt(0)
+    );
+    return { size: serializeTransaction(transaction).length, maxBytes: LEGACY_TRANSACTION_MAX_BYTES };
+  } catch {
+    // Exceeds the serialized transaction limit — rejected exactly as the real
+    // publish flow would reject it.
+    return { size: null, maxBytes: LEGACY_TRANSACTION_MAX_BYTES };
+  }
+}
+
 /**
  * Serialize transaction for sending
  * Returns a Buffer containing the serialized transaction
@@ -338,125 +400,4 @@ export function serializeTransaction(transaction: VersionedTransaction): Buffer 
     console.error('[HashDrop] Failed to serialize transaction:', error);
     throw new Error('Cannot serialize transaction: serialization failed');
   }
-}
-
-/**
- * Deserialize transaction from buffer
- * Note: V1 deserialization is not supported by current SDK
- */
-export function deserializeTransaction(buffer: Buffer): VersionedTransaction {
-  // Check if this is a v1 transaction by looking at the first byte
-  // v1 transactions start with 0x01
-  const versionByte = buffer[0];
-  
-  if (versionByte !== 0x01) {
-    throw new Error(
-      'Only v1 transactions are supported. ' +
-      'This transaction is not a v1 transaction.'
-    );
-  }
-  
-  return VersionedTransaction.deserialize(new Uint8Array(buffer));
-}
-
-/**
- * Get the serialized transaction size
- */
-export function getTransactionSize(transaction: VersionedTransaction): number {
-  return serializeTransaction(transaction).length;
-}
-
-/**
- * Check if a transaction is a v1 transaction
- */
-export function isV1Transaction(transaction: VersionedTransaction): boolean {
-  const version = transaction.message.version as any;
-  return version === 1 || version === '1';
-}
-
-/**
- * Get transaction version as string
- */
-export function getTransactionVersion(transaction: VersionedTransaction): TransactionVersionType {
-  const version = transaction.message.version as any;
-  if (version === 1 || version === '1') {
-    return 'v1';
-  }
-  return 'legacy';
-}
-
-/**
- * Build a transaction and validate its size
- * Returns the transaction and its serialized size
- */
-export async function buildAndValidatePublicTransaction(
-  content: string,
-  hashDropId: string,
-  contentHash: string,
-  contentType: string,
-  contentSize: number,
-  address: string,
-  connection?: Connection
-): Promise<{
-  transaction: VersionedTransaction;
-  serializedSize: number;
-  version: TransactionVersionType;
-  capabilities: SolanaTransactionCapabilities;
-}> {
-  const transaction = await buildPublicTransaction(
-    content,
-    hashDropId,
-    contentHash,
-    contentType,
-    contentSize,
-    address,
-    connection
-  );
-
-  const serializedSize = getTransactionSize(transaction);
-  const version = getTransactionVersion(transaction);
-
-  return {
-    transaction,
-    serializedSize,
-    version,
-    capabilities: {
-      supportsV1: true,
-      supportsV0: false,
-      maxTransactionBytes: V1_TRANSACTION_MAX_BYTES,
-      preferredVersion: 'v1',
-      network: getCurrentNetwork(),
-    },
-  };
-}
-
-/**
- * Get the maximum transaction bytes for v1 transactions
- * @deprecated Always returns V1_TRANSACTION_MAX_BYTES (4096)
- */
-export function getMaxTransactionBytes(_capabilities?: any): number {
-  return V1_TRANSACTION_MAX_BYTES;
-}
-
-/**
- * Build a Public Mode transaction using Kit-compatible Address type
- */
-export async function buildPublicTransactionFromAddress(
-  content: string,
-  hashDropId: string,
-  contentHash: string,
-  contentType: string,
-  contentSize: number,
-  address: string, // Address as string (Kit-compatible)
-  connection?: Connection
-): Promise<VersionedTransaction> {
-  return buildPublicTransaction(
-    content,
-    hashDropId,
-    contentHash,
-    contentType,
-    contentSize,
-    address,
-    connection
-  );
 }

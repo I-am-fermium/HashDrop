@@ -2,7 +2,7 @@
  * Tests for HashDrop Proof Mode (V3)
  *
  * Comprehensive tests covering hashing, encoding, decoding, malformed
- * payload rejection, verification logic, and V2 compatibility.
+ * payload rejection, and verification logic.
  */
 
 import {
@@ -12,7 +12,7 @@ import {
   encodePublicPayload,
   decodePublicPayload,
   decodeHashDropPayload,
-  HASHDROP_VERSION,
+  HASHDROP_PROTOCOL_VERSION,
 } from './memo';
 import { calculateHash, stringToBytes, generateHashDropId } from './content';
 
@@ -488,6 +488,6 @@ describe('Proof Mode - Verification Logic (Round-Trip)', () => {
 
 describe('Proof Mode - Protocol Constants', () => {
   it('should have correct protocol version', () => {
-    expect(HASHDROP_VERSION).toBe('v3');
+    expect(HASHDROP_PROTOCOL_VERSION).toBe('v3');
   });
 });

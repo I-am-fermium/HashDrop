@@ -1,9 +1,12 @@
 /**
- * HashDrop V2 Retrieval Diagnostic Test
- * 
- * This test runs the exact diagnostic steps specified in the task to inspect
- * the actual runtime shape of the Solana transaction object.
- * 
+ * HashDrop Legacy V2 Retrieval Diagnostic Test
+ *
+ * Inspects a historical on-chain V2 transaction fetched from Devnet.
+ * Legacy V2 is NOT the current protocol — the active protocol is V3
+ * (HASHDROP|v3|…) and V2 payloads are rejected by the decoders. This test
+ * exists purely to diagnose the runtime shape of the old Solana
+ * transaction object.
+ *
  * DO NOT make any fixes - this is for diagnostics only.
  */
 
@@ -14,10 +17,10 @@ import * as bs58 from 'bs58';
 const KNOWN_GOOD_TX = '5QSigbpsA4siqaTpGza3Q4kMFrwSzUKXn5TSkzJFyLxy8EdARYgwhFaMw69cGD3x1DruTZt2GweRB65c3GXCsyYg';
 const MEMO_PROGRAM_ID = 'Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH';
 
-describe('HashDrop V2 Retrieval Diagnostic', () => {
+describe('HashDrop Legacy V2 Retrieval Diagnostic', () => {
   it('should run full diagnostic on known-good transaction', async () => {
     console.log('='.repeat(80));
-    console.log('HASHDROP V2 RETRIEVAL DIAGNOSTIC');
+    console.log('HASHDROP LEGACY V2 RETRIEVAL DIAGNOSTIC');
     console.log('='.repeat(80));
     console.log('');
 
@@ -210,9 +213,9 @@ describe('HashDrop V2 Retrieval Diagnostic', () => {
       console.log('[HD DEBUG] Got:', memoText);
     }
 
-    // STEP 8: Parse V2 and verify
+    // STEP 8: Parse legacy V2 and verify
     console.log('');
-    console.log('[STEP 8] V2 parsing and verification...');
+    console.log('[STEP 8] Legacy V2 parsing and verification...');
 
     const parts = memoText.split('|');
     console.log('[HD DEBUG] Memo parts:', parts);

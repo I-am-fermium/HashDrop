@@ -40,9 +40,6 @@ export const getEndpoint = (): string => {
 // V1 transactions support up to 4096 bytes
 // Legacy/V0 transactions support up to 1232 bytes
 
-// Protocol configuration
-export const HASHDROP_VERSION = 1;
-
 // Token decimals for SOL
 export const SOL_DECIMALS = 9;
 

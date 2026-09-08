@@ -39,7 +39,7 @@ Users can publish small text and source-code assets without creating an account,
 
 - **`src/app/`** - Next.js App Router (page.tsx, layout.tsx, viewer.tsx)
 - **`src/components/`** - React components (WalletConnect, ContentEditor, PublishButton, CostSummary)
-- **`src/hooks/`** - React hooks (useWallet, useCostEstimate, usePublish)
+- **`src/hooks/`** - React hooks (useWallet, useCostEstimate)
 - **`src/lib/`** - Utilities
   - `content.ts` - Content processing, SHA-256 hashing, HashDrop ID generation
   - `memo.ts` - Memo Drop encoding/decoding

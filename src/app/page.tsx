@@ -1,13 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Transaction, PublicKey, TransactionInstruction, VersionedTransaction } from '@solana/web3.js';
+import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from 'react';
 
 import { useWallet, TransactionResult, getConnection } from '../hooks/useWallet';
 import { useCostEstimate } from '../hooks/useCostEstimate';
 import { processContent, ContentMeta } from '../lib/content';
-import { encodePublicPayload, canFitInMemo, MEMO_PROGRAM_ID, calculateTransactionSize, LEGACY_TRANSACTION_MAX_BYTES, V1_TRANSACTION_MAX_BYTES, HASHDROP_PRIVATE_CRYPTO_VERSION } from '../lib/memo';
-import { detectTransactionCapabilities, buildPublicTransaction, buildProofDropTransaction, buildPrivateTransaction, serializeTransaction } from '../lib/transactions';
+import { HASHDROP_PRIVATE_CRYPTO_VERSION } from '../lib/memo';
+import { detectTransactionCapabilities, buildPublicTransaction, buildProofDropTransaction, buildPrivateTransaction, serializeTransaction, measurePublicTransactionSize } from '../lib/transactions';
 import { encryptPrivateContent, generateRecipientKeypair, PrivateEncryptionResult } from '../lib/crypto/privateDrop';
 import { generateAesKey, generateAesIv } from '../lib/crypto/aesGcm';
 import { bytesToBase64 } from '../lib/encoding';
@@ -86,7 +85,7 @@ export default function Home() {
   // mode change so the user cannot lose access to the downloads by accident.
   const [privatePublishResult, setPrivatePublishResult] = useState<PrivatePublishRecovery | null>(null);
   const [transactionInfo, setTransactionInfo] = useState<{
-    transactionSize: number;
+    transactionSize: number | null;
     maxTransactionSize: number;
     version: string;
     availableBytes: number;
@@ -99,10 +98,12 @@ export default function Home() {
 
   // Track mounted state to prevent hydration mismatch
   // Network state is browser-dependent (reads from localStorage)
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // (no setState-in-effect: useSyncExternalStore flips to true after hydration)
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
 
   const { isConnected, publicKey, connect, disconnect, sendTransaction, network, setNetwork } = useWallet();
   const { estimate, calculate } = useCostEstimate(content);
@@ -133,7 +134,15 @@ export default function Home() {
   // Calculate transaction size info and capabilities
   useEffect(() => {
     const calculateInfo = async () => {
-      if (content && publicKey) {
+      // The transaction-size calculation below encodes the FULL content into a
+      // PUBLIC-mode payload (encodePublicPayload). It is only meaningful in
+      // Public mode: Proof/Private never place the original content on-chain,
+      // so the Public content-size restriction must not apply to them.
+      if (mode !== 'public') {
+        setTransactionInfo(null);
+        return;
+      }
+      if (contentMeta && publicKey) {
         try {
           // Get transaction capabilities
           const caps = await detectTransactionCapabilities(getConnection());
@@ -143,13 +152,23 @@ export default function Home() {
             preferredVersion: caps.preferredVersion,
           });
           
-          // Calculate transaction size
-          const info = calculateTransactionSize(content);
+          // Measure the EXACT serialized size of the Public transaction that
+          // will be submitted, via the same encoding/compilation path as
+          // buildPublicTransaction (V3 PUBLIC memo with the real content +
+          // platform-fee transfer, compiled to v0). Preview of reality.
+          const measured = measurePublicTransactionSize(
+            content,
+            contentMeta.hashDropId,
+            contentMeta.hash,
+            'text/plain',
+            contentMeta.size,
+            publicKey
+          );
           setTransactionInfo({
-            transactionSize: info.transactionBytes,
-            maxTransactionSize: info.maxTransactionBytes,
-            version: caps.preferredVersion,
-            availableBytes: info.availableBytes,
+            transactionSize: measured.size,
+            maxTransactionSize: measured.maxBytes,
+            version: 'v0',
+            availableBytes: measured.size != null ? measured.maxBytes - measured.size : -1,
           });
         } catch (error) {
           console.error('[HashDrop] Failed to calculate transaction info:', error);
@@ -157,7 +176,7 @@ export default function Home() {
       }
     };
     calculateInfo();
-  }, [content, publicKey]);
+  }, [content, contentMeta, publicKey, mode]);
 
   // Handle publish - show confirmation dialog
   const handlePublish = useCallback(async () => {
@@ -552,18 +571,24 @@ export default function Home() {
               <div className="font-medium text-primary w-full">
                 <div className="font-medium text-primary">HashDrop Memo Drop</div>
                 <div className="text-sm text-secondary">
-                  {transactionInfo ? (
-                    <>
-  Transaction: {formatBytes(transactionInfo.transactionSize)} / ~1 KB
-                      {transactionInfo.availableBytes < 0 && ' - Content too large'}
-                    </>
+                  {mode === 'public' ? (
+                    transactionInfo ? (
+                      <>
+  Transaction: {transactionInfo.transactionSize != null ? formatBytes(transactionInfo.transactionSize) : 'Too large'} / ~1 KB
+                        {transactionInfo.availableBytes < 0 && ' - Content too large'}
+                      </>
+                    ) : (
+                      `Content must fit within transaction limits • transaction-based`
+                    )
+                  ) : mode === 'proof' ? (
+                    `Content is not published on-chain • only the cryptographic proof/commitment and metadata are recorded`
                   ) : (
-                    `Content must fit within transaction limits • transaction-based`
+                    `Content is encrypted locally (AES-256-GCM + ML-KEM-768) • the original content is never stored on-chain`
                   )}
                 </div>
               </div>
             </div>
-            {transactionInfo && transactionInfo.availableBytes >= 0 && (
+            {(mode !== 'public' || (transactionInfo && transactionInfo.availableBytes >= 0)) && (
               <span className="text-accent text-xs font-mono">SELECTED</span>
             )}
           </div>
@@ -786,7 +811,15 @@ export default function Home() {
               <div className="flex justify-between">
                 <span className="text-secondary">Transaction Size:</span>
                 <span className="text-accent">
-  {transactionInfo ? `${formatBytes(transactionInfo.transactionSize)} / ~1 KB (${transactionInfo.version.toUpperCase()})` : 'Calculating...'}
+  {mode === 'public'
+    ? transactionInfo
+      ? transactionInfo.transactionSize != null
+        ? `${formatBytes(transactionInfo.transactionSize)} / ~1 KB (${transactionInfo.version.toUpperCase()})`
+        : `Too large (${transactionInfo.version.toUpperCase()})`
+      : 'Calculating...'
+    : mode === 'proof'
+    ? 'Proof/commitment metadata only — original content is not on-chain'
+    : 'Private/encrypted metadata only — original content is not on-chain'}
                 </span>
               </div>
 
