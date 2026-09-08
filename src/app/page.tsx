@@ -790,7 +790,7 @@ export default function Home() {
             <div className="space-y-3 mb-6">
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-secondary">Mode:</span>
-                <span className="text-accent font-bold">{mode === 'proof' ? 'Proof' : 'Public'}</span>
+                <span className="text-accent font-bold">{mode === 'proof' ? 'Proof' : mode === 'private' ? 'Private' : 'Public'}</span>
               </div>
 
               <div className="flex items-baseline justify-between gap-3">
