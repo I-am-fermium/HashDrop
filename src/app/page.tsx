@@ -788,42 +788,42 @@ export default function Home() {
             <h3 className="text-lg font-semibold mb-4 text-primary">Confirm Publication</h3>
             
             <div className="space-y-3 mb-6">
-              <div className="flex justify-between">
+              <div className="flex items-baseline justify-between gap-3">
                 <span className="text-secondary">Mode:</span>
                 <span className="text-accent font-bold">{mode === 'proof' ? 'Proof' : 'Public'}</span>
               </div>
 
-              <div className="flex justify-between">
+              <div className="flex items-baseline justify-between gap-3">
                 <span className="text-secondary">Method:</span>
                 <span className="font-mono text-accent">HashDrop Memo Drop</span>
               </div>
 
-              <div className="flex justify-between">
+              <div className="flex items-baseline justify-between gap-3">
                 <span className="text-secondary">Estimated Cost:</span>
                 <span className="text-accent font-bold">{getDisplayCost().toFixed(6)} SOL</span>
               </div>
 
-              <div className="flex justify-between">
+              <div className="flex items-baseline justify-between gap-3">
                 <span className="text-secondary">Content Size:</span>
                 <span className="text-accent">{contentMeta?.size || 0} bytes</span>
               </div>
 
-              <div className="flex justify-between">
+              <div className="flex items-baseline justify-between gap-3">
                 <span className="text-secondary">Transaction Size:</span>
                 <span className="text-accent">
-  {mode === 'public'
-    ? transactionInfo
-      ? transactionInfo.transactionSize != null
-        ? `${formatBytes(transactionInfo.transactionSize)} / ~1 KB (${transactionInfo.version.toUpperCase()})`
-        : `Too large (${transactionInfo.version.toUpperCase()})`
-      : 'Calculating...'
-    : mode === 'proof'
-    ? 'Proof/commitment metadata only — original content is not on-chain'
-    : 'Private/encrypted metadata only — original content is not on-chain'}
+                  {mode === 'public'
+                    ? transactionInfo
+                      ? transactionInfo.transactionSize != null
+                        ? `${formatBytes(transactionInfo.transactionSize)} / ~1 KB (${transactionInfo.version.toUpperCase()})`
+                        : `Too large (${transactionInfo.version.toUpperCase()})`
+                      : 'Calculating...'
+                    : mode === 'proof'
+                    ? 'Proof/commitment metadata only — original content is not on-chain'
+                    : 'Private/encrypted metadata only — original content is not on-chain'}
                 </span>
               </div>
 
-              <div className="flex justify-between">
+              <div className="flex items-baseline justify-between gap-3">
                 <span className="text-secondary">HashDrop ID:</span>
                 <span className="font-mono text-xs text-accent break-all">
                   {contentMeta?.hashDropId?.slice(0, 16)}...
