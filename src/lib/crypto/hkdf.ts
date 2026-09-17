@@ -19,19 +19,11 @@
 import { utf8ToBytes } from '../encoding';
 
 /**
- * HKDF-SHA-256 extract phase
- * Extracts a pseudo-random key from input keying material
+ * Pass a Uint8Array view to WebCrypto as a BufferSource, honoring the exact
+ * byte range represented by the view (subarray-safe).
  */
-async function hkdfExtract(salt: Uint8Array, ikm: Uint8Array): Promise<CryptoKey> {
-  const crypto = globalThis.crypto;
-  const baseKey = await crypto.subtle.importKey(
-    'raw',
-    ikm.buffer as ArrayBuffer,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  return baseKey;
+function asBufferSource(bytes: Uint8Array): BufferSource {
+  return bytes as unknown as BufferSource;
 }
 
 /**
@@ -52,7 +44,7 @@ async function hkdfExpand(prk: CryptoKey, info: Uint8Array, length: number): Pro
     data.set(info, t.length);
     data[data.length - 1] = i;
     
-    const signature = await crypto.subtle.sign('HMAC', prk, data.buffer as ArrayBuffer);
+    const signature = await crypto.subtle.sign('HMAC', prk, asBufferSource(data));
     t = new Uint8Array(signature);
     okm.set(t, (i - 1) * hashLen);
   }
@@ -86,13 +78,15 @@ export async function hkdfSha256(
     // Extract phase
     const prk = await crypto.subtle.importKey(
       'raw',
-      actualSalt.buffer as ArrayBuffer,
+      asBufferSource(actualSalt),
       { name: 'HMAC', hash: 'SHA-256' },
       false,
       ['sign']
     );
     
-    const prkSigned = await crypto.subtle.sign('HMAC', prk, ikm.buffer as ArrayBuffer);
+    const prkSigned = await crypto.subtle.sign('HMAC', prk, asBufferSource(ikm));
+    // prkSigned is a fresh BufferSource returned by the API (full-length,
+    // byteOffset 0), so it can be passed to importKey as-is.
     const prkKey = await crypto.subtle.importKey(
       'raw',
       prkSigned,

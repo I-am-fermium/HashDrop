@@ -26,7 +26,7 @@
  *   J. PUBLIC and PROOF payload encoding remain unaffected
  */
 
-import { processContent, stringToBytes } from './content';
+import { processContent, stringToBytes, calculateHash } from './content';
 import {
   encryptPrivateContent,
   generateRecipientKeypair,
@@ -52,8 +52,8 @@ import {
   HASHDROP_PRIVATE_CRYPTO_VERSION,
   MEMO_PROGRAM_ID,
 } from './memo';
-import { verifyPrivateDrop, PrivateVerificationResult } from './verification';
-import { bytesToBase64, base64ToBytes } from './encoding';
+import { verifyPrivateDrop, verifyBySignature, PrivateVerificationResult } from './verification';
+import { bytesToBase64, base64ToBytes, utf8ToBase64 } from './encoding';
 import type { Connection } from '@solana/web3.js';
 import {
   buildPrivateArtifactFilename,
@@ -102,7 +102,7 @@ function fakeTxWithMemo(memo: string) {
 // ---------------------------------------------------------------------------
 
 async function simulatePrivatePublish() {
-  // 1. Content processing (same as page.tsx contentMeta)
+  // 1. Content processing (same as page.tsx textMeta)
   const meta = await processContent(PLAINTEXT, PUBLISHER);
 
   // 2. ONE ML-KEM-768 keypair for this drop (same as page.tsx)
@@ -115,7 +115,7 @@ async function simulatePrivatePublish() {
   const encryptionResult = await encryptPrivateContent(
     stringToBytes(PLAINTEXT),
     meta.hash,
-    meta.contentType,
+    meta.mimeType,
     keypair.publicKey,
     keyFingerprint,
     meta.hashDropId
@@ -187,20 +187,24 @@ describe('PRIVATE publish → export → Viewer compatibility', () => {
 
     const a = pub.artifactEnvelope.split('|');
     const m = pub.onChainMemo.split('|');
-    expect(a.length).toBe(11);
+    // Canonical artifact envelope: 13 fields (type at index 5; trailing filename
+    // '' for text). The PRIVATE memo stays 11 fields.
+    expect(a.length).toBe(13);
     expect(m.length).toBe(11);
     expect(m[0]).toBe('HASHDROP');
     expect(m[2]).toBe('PRIVATE');
 
-    // memo:   HASHDROP|v3|PRIVATE|id|sha256|size|mime|cryptoVer|fp|iv|key
-    // artifact: HASHDROP-PRIVATE-BLOB|v1|id|sha256|size|mime|cryptoVer|fp|ct|iv|ciphertext
+    // memo:    HASHDROP|v3|PRIVATE|id|sha256|size|mime|cryptoVer|fp|iv|key
+    // artifact: HASHDROP-PRIVATE-BLOB|v1|id|sha256|size|type|mime|cryptoVer|fp|ct|iv|ciphertext|filename
     expect(a[2]).toBe(m[3]); // hashDropId
     expect(a[3]).toBe(m[4]); // SHA-256 commitment
     expect(a[4]).toBe(m[5]); // content size
-    expect(a[5]).toBe(m[6]); // MIME type
-    expect(a[6]).toBe(m[7]); // crypto version
-    expect(a[6]).toBe(HASHDROP_PRIVATE_CRYPTO_VERSION);
-    expect(a[7]).toBe(m[8]); // key fingerprint
+    expect(a[5]).toBe('TEXT'); // object type (version ≠ type)
+    expect(a[6]).toBe(m[6]); // MIME type
+    expect(a[7]).toBe(m[7]); // crypto version
+    expect(a[7]).toBe(HASHDROP_PRIVATE_CRYPTO_VERSION);
+    expect(a[8]).toBe(m[8]); // key fingerprint
+    expect(a[12]).toBe(''); // filename — '' for text drops
 
     // The artifact is the exact encryption output (no reconstruction)
     const artifact = importArtifact(pub.artifactEnvelope);
@@ -299,10 +303,11 @@ describe('PRIVATE publish → export → Viewer compatibility', () => {
     mockGetTransaction.mockResolvedValue(fakeTxWithMemo(pub.onChainMemo));
 
     // Flip one byte of the AES-GCM ciphertext inside the artifact envelope
+    // (ciphertext is field index 11; filename is the trailing field).
     const parts = pub.artifactEnvelope.split('|');
-    const ciphertext = base64ToBytes(parts[10]);
+    const ciphertext = base64ToBytes(parts[11]);
     ciphertext[0] ^= 0xff;
-    const tamperedEnvelope = [...parts.slice(0, 10), bytesToBase64(ciphertext)].join('|');
+    const tamperedEnvelope = [...parts.slice(0, 11), bytesToBase64(ciphertext), parts[12]].join('|');
 
     const tamperedArtifact = importArtifact(tamperedEnvelope);
     const secretKey = importSecretKey(pub.privateKeyEnvelope);
@@ -320,6 +325,226 @@ describe('PRIVATE publish → export → Viewer compatibility', () => {
     expect(result.plaintext).toBeNull();
   });
 
+  it('K: a memo with a foreign cryptoVersion (HD-P1) fails closed before decryption', async () => {
+    const pub = await simulatePrivatePublish();
+    const parts = pub.onChainMemo.split('|');
+    parts[7] = 'HD-P1'; // tamper ONLY the crypto version field
+    mockGetTransaction.mockResolvedValue(fakeTxWithMemo(parts.join('|')));
+
+    const artifact = importArtifact(pub.artifactEnvelope);
+    const secretKey = importSecretKey(pub.privateKeyEnvelope);
+
+    const result: PrivateVerificationResult = await verifyPrivateDrop(
+      fakeConnection,
+      SIGNATURE,
+      secretKey,
+      artifact,
+      artifact.mlKemCiphertext,
+      pub.meta.hashDropId
+    );
+
+    // Parse failure → the memo is rejected before any ML-KEM/AES-GCM work:
+    // no verified result and no plaintext can ever be produced.
+    expect(result.verified).toBe(false);
+    expect(result.plaintext).toBeNull();
+    expect(result.plaintextBytes).toBeUndefined();
+  });
+
+  it('L: a non-canonical size memo ("0100") fails closed before decryption', async () => {
+    const pub = await simulatePrivatePublish();
+    const parts = pub.onChainMemo.split('|');
+    parts[5] = `0${parts[5]}`; // 100 → 0100: same numeric value, non-canonical wire form
+    mockGetTransaction.mockResolvedValue(fakeTxWithMemo(parts.join('|')));
+
+    const artifact = importArtifact(pub.artifactEnvelope);
+    const secretKey = importSecretKey(pub.privateKeyEnvelope);
+
+    const result = await verifyPrivateDrop(
+      fakeConnection,
+      SIGNATURE,
+      secretKey,
+      artifact,
+      artifact.mlKemCiphertext,
+      pub.meta.hashDropId
+    );
+
+    expect(result.verified).toBe(false);
+    expect(result.plaintext).toBeNull();
+    expect(result.plaintextBytes).toBeUndefined();
+  });
+
+  it('M: malformed key-envelope lengths fail closed before decryption (F-1)', async () => {
+    const pub = await simulatePrivatePublish();
+    const secretKey = importSecretKey(pub.privateKeyEnvelope);
+    const artifact = importArtifact(pub.artifactEnvelope);
+
+    // The key envelope is a fixed-size structure: IV = 12 bytes, wrapped key =
+    // 32-byte AES-256 content key + 16-byte GCM tag = 48 bytes. Anything else
+    // must be rejected at the validation boundary, before any crypto runs.
+    const malformedCases: Array<[number, number]> = [
+      [9, 11], // IV of 11 bytes
+      [9, 13], // IV of 13 bytes
+      [10, 47], // wrapped key of 47 bytes
+      [10, 49], // wrapped key of 49 bytes
+    ];
+    for (const [fieldIndex, byteLength] of malformedCases) {
+      const parts = pub.onChainMemo.split('|');
+      parts[fieldIndex] = bytesToBase64(new Uint8Array(byteLength)); // valid Base64, wrong length
+      mockGetTransaction.mockResolvedValue(fakeTxWithMemo(parts.join('|')));
+
+      const result = await verifyPrivateDrop(
+        fakeConnection,
+        SIGNATURE,
+        secretKey,
+        artifact,
+        artifact.mlKemCiphertext,
+        pub.meta.hashDropId
+      );
+
+      expect(result.verified).toBe(false);
+      expect(result.plaintext).toBeNull();
+      expect(result.plaintextBytes).toBeUndefined();
+      expect(result.error).toContain('Invalid private key envelope');
+    }
+  });
+
+  it('N: a PUBLIC memo with a non-canonical hash is rejected at parse time (F-2)', async () => {
+    const pub = await simulatePrivatePublish();
+    // Uppercase hex is the same semantic value but a different protocol byte
+    // string; the canonical lowercase form is the only accepted representation.
+    const parts = pub.onChainMemo.split('|');
+    parts[4] = parts[4].toUpperCase();
+    mockGetTransaction.mockResolvedValue(fakeTxWithMemo(parts.join('|')));
+
+    const result = await verifyBySignature(fakeConnection, SIGNATURE, pub.meta.hashDropId);
+
+    expect(result.verified).toBe(false);
+    expect(result.content).toBe('');
+  });
+
+  it('O: malformed/non-canonical Base64 in the key envelope fails closed before decryption (Gap A)', async () => {
+    const pub = await simulatePrivatePublish();
+    const secretKey = importSecretKey(pub.privateKeyEnvelope);
+    const artifact = importArtifact(pub.artifactEnvelope);
+
+    // Representative malformed/non-canonical Base64 entering through the REAL
+    // on-chain memo fields (field 10 = envelope IV, field 9 = wrapped key).
+    // Every case must be rejected by the strict canonical Base64 validator
+    // BEFORE any key derivation or AES-GCM work; the failure must be the
+    // structured verification failure, never a crash or a silent pass.
+    const malformedCases: Array<[number, string]> = [
+      [10, 'not base64!!'],    // invalid alphabet (IV field)
+      [10, 'QQ'],              // missing padding / impossible length (IV field)
+      [10, 'QT=='],            // non-canonical discarded bits (IV field)
+      [9, 'QQ==='],            // excess padding (wrapped-key field)
+      [9, 'QUJDRUZH_'],        // base64url alphabet (wrapped-key field)
+    ];
+    for (const [fieldIndex, badValue] of malformedCases) {
+      const parts = pub.onChainMemo.split('|');
+      parts[fieldIndex] = badValue;
+      mockGetTransaction.mockResolvedValue(fakeTxWithMemo(parts.join('|')));
+
+      const result = await verifyPrivateDrop(
+        fakeConnection,
+        SIGNATURE,
+        secretKey,
+        artifact,
+        artifact.mlKemCiphertext,
+        pub.meta.hashDropId
+      );
+
+      expect(result.verified).toBe(false);
+      expect(result.plaintext).toBeNull();
+      expect(result.plaintextBytes).toBeUndefined();
+      expect(result.error).toContain('Invalid Base64');
+    }
+  });
+
+  it('P: rejects a wrapped key substituted from an independent drop (Gap C)', async () => {
+    // Two genuinely independent PRIVATE drops of the same content: identical
+    // commitment metadata (same hash/size/MIME/ID), different ML-KEM keypairs
+    // and therefore different fingerprints and wrapped-key envelopes.
+    const dropA = await simulatePrivatePublish();
+    const dropB = await simulatePrivatePublish();
+
+    // Substitute ONLY drop B's wrapped-key envelope (fields 9/10) into drop A's
+    // memo. Stage-5 artifact/memo equality still passes, and the F-1 length
+    // checks still pass (drop B's envelope is structurally valid). The
+    // rejection must come from the cryptographic binding: drop A's capsule
+    // derives drop A's KEK, which cannot authenticate drop B's wrapped key
+    // under drop A's AAD2 context.
+    const parts = dropA.onChainMemo.split('|');
+    const bParts = dropB.onChainMemo.split('|');
+    parts[9] = bParts[9];
+    parts[10] = bParts[10];
+    mockGetTransaction.mockResolvedValue(fakeTxWithMemo(parts.join('|')));
+
+    const artifactA = importArtifact(dropA.artifactEnvelope);
+    const secretKeyA = importSecretKey(dropA.privateKeyEnvelope);
+
+    const result = await verifyPrivateDrop(
+      fakeConnection,
+      SIGNATURE,
+      secretKeyA,
+      artifactA,
+      artifactA.mlKemCiphertext,
+      dropA.meta.hashDropId
+    );
+
+    expect(result.verified).toBe(false);
+    expect(result.plaintext).toBeNull();
+    expect(result.plaintextBytes).toBeUndefined();
+    expect(result.error).toContain('Key unwrapping failed');
+  });
+
+const PUBLIC_CONTENT = 'PUBLIC-VERIFICATION-ORIGINAL';
+const OTHER_CONTENT = 'TAMPERED-SUBSTITUTE-BODY';
+
+  it('Q: accepts PUBLIC content whose SHA-256 matches the on-chain commitment (control for the integrity test)', async () => {
+    // Control for test R: the same canonical PUBLIC memo with the CORRECT
+    // content verifies — proving that the mismatch rejection in R comes from
+    // the content-integrity comparison, not from parse rejection.
+    const hash = await calculateHash(stringToBytes(PUBLIC_CONTENT));
+    const memo = encodePublicPayload(
+      'hd_publictest01',
+      hash,
+      'text/plain',
+      stringToBytes(PUBLIC_CONTENT).length,
+      utf8ToBase64(PUBLIC_CONTENT)
+    );
+    mockGetTransaction.mockResolvedValue(fakeTxWithMemo(memo));
+
+    const result = await verifyBySignature(fakeConnection, SIGNATURE);
+
+    expect(result.verified).toBe(true);
+    expect(result.content).toBe(PUBLIC_CONTENT);
+    expect(result.error).toBeNull();
+  });
+
+  it('R: rejects PUBLIC content whose canonical hash does not match (Gap B — integrity failure, not parse failure)', async () => {
+    // The on-chain commitment is the canonical SHA-256 of DIFFERENT content.
+    // The memo is fully canonical (valid lowercase 64-hex hash, canonical
+    // size) and parses successfully — the rejection must therefore come from
+    // the content-integrity comparison after SHA-256 recomputation, and the
+    // mismatched content must never be exposed as verified.
+    const otherHash = await calculateHash(stringToBytes(OTHER_CONTENT));
+    const memo = encodePublicPayload(
+      'hd_publictest01',
+      otherHash,
+      'text/plain',
+      stringToBytes(PUBLIC_CONTENT).length,
+      utf8ToBase64(PUBLIC_CONTENT)
+    );
+    mockGetTransaction.mockResolvedValue(fakeTxWithMemo(memo));
+
+    const result = await verifyBySignature(fakeConnection, SIGNATURE);
+
+    expect(result.verified).toBe(false);
+    expect(result.content).toBe('');
+    expect(result.hash).not.toBe(result.contentHash);
+    expect(result.error).toContain('CONTENT VERIFICATION FAILED');
+  });
+
   it('J: PUBLIC and PROOF payload encoding remain unaffected', () => {
     // PUBLIC round-trip still works with the canonical V3 format
     const publicMemo = encodePublicPayload('hd_pub', 'a'.repeat(64), 'text/plain', 5, 'SGVsbG8=');
@@ -329,11 +554,12 @@ describe('PRIVATE publish → export → Viewer compatibility', () => {
     expect(decodedPublic!.content).toBe('SGVsbG8=');
 
     // PROOF round-trip still works with the canonical V3 format
-    const proofMemo = encodeProofPayload('hd_proof', 'b'.repeat(64), 16);
+    const proofMemo = encodeProofPayload('hd_proof', 'b'.repeat(64), 16, 'text/plain', '');
     const decodedProof = decodeProofPayload(proofMemo);
     expect(decodedProof).not.toBeNull();
     expect(decodedProof!.mode).toBe('PROOF');
     expect(decodedProof!.contentHash).toBe('b'.repeat(64));
+    expect(decodedProof!.contentType).toBe('text/plain');
   });
 });
 

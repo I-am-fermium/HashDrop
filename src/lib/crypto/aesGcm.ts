@@ -14,11 +14,14 @@
  */
 
 /**
- * AES-GCM encryption result
+ * Pass a Uint8Array view to WebCrypto as a BufferSource.
+ *
+ * WebCrypto BufferSource arguments consume ONLY the bytes represented by the
+ * view (its byteOffset/byteLength), never the whole backing ArrayBuffer. Passing
+ * `.buffer` would be incorrect for subarrays, so the view itself is passed.
  */
-export interface AesGcmCiphertext {
-  ciphertext: Uint8Array; // Encrypted data (includes GCM auth tag)
-  iv: Uint8Array; // 96-bit nonce
+function asBufferSource(bytes: Uint8Array): BufferSource {
+  return bytes as unknown as BufferSource;
 }
 
 /**
@@ -73,7 +76,7 @@ export async function aesGcmEncrypt(
     // Web Crypto API path
     const cryptoKey = await globalThis.crypto.subtle.importKey(
       'raw',
-      key.buffer as ArrayBuffer,
+      asBufferSource(key),
       { name: 'AES-GCM', length: 256 },
       false,
       ['encrypt']
@@ -81,16 +84,16 @@ export async function aesGcmEncrypt(
 
     const algorithm: AesGcmParams = {
       name: 'AES-GCM',
-      iv: iv.buffer as ArrayBuffer,
+      iv: asBufferSource(iv),
     };
     if (aad) {
-      algorithm.additionalData = aad.buffer as ArrayBuffer;
+      algorithm.additionalData = asBufferSource(aad);
     }
 
     const ciphertextBuffer = await globalThis.crypto.subtle.encrypt(
       algorithm,
       cryptoKey,
-      plaintext.buffer as ArrayBuffer
+      asBufferSource(plaintext)
     );
 
     return new Uint8Array(ciphertextBuffer);
@@ -130,7 +133,7 @@ export async function aesGcmDecrypt(
     // Web Crypto API path
     const cryptoKey = await globalThis.crypto.subtle.importKey(
       'raw',
-      key.buffer as ArrayBuffer,
+      asBufferSource(key),
       { name: 'AES-GCM', length: 256 },
       false,
       ['decrypt']
@@ -138,17 +141,17 @@ export async function aesGcmDecrypt(
 
     const algorithm: AesGcmParams = {
       name: 'AES-GCM',
-      iv: iv.buffer as ArrayBuffer,
+      iv: asBufferSource(iv),
     };
     if (aad) {
-      algorithm.additionalData = aad.buffer as ArrayBuffer;
+      algorithm.additionalData = asBufferSource(aad);
     }
 
     try {
       const plaintextBuffer = await globalThis.crypto.subtle.decrypt(
         algorithm,
         cryptoKey,
-        ciphertext.buffer as ArrayBuffer
+        asBufferSource(ciphertext)
       );
       return new Uint8Array(plaintextBuffer);
     } catch (e) {

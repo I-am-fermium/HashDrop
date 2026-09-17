@@ -48,8 +48,8 @@ HashDrop Protocol v3 supports three modes:
 **PUBLIC** (content published on-chain):
 `HASHDROP|v3|PUBLIC|hashDropId|sha256|mimeType|contentSize|base64Content`
 
-**PROOF** (only cryptographic proof published):
-`HASHDROP|v3|PROOF|hashDropId|sha256|contentSize`
+**PROOF** (only cryptographic proof published — unified for all content kinds):
+`HASHDROP|v3|PROOF|hashDropId|sha256|contentSize|mimeType|filename`
 
 **PRIVATE** (commitment on-chain, encrypted content off-chain):
 `HASHDROP|v3|PRIVATE|hashDropId|sha256|contentSize|mimeType|cryptoVersion|keyFingerprint|encryptedKeyIv|encryptedKey`
@@ -111,13 +111,16 @@ If all checks pass, the HashDrop is verified as authentic.
 1. Fetch transaction from Solana by signature
 2. Find the SPL Memo Instruction in the transaction
 3. Decode the memo data
-4. Parse the V3 PROOF payload format
-5. User supplies the original content
-6. Calculate SHA-256 hash of the supplied content
-7. Calculate UTF-8 byte length of the supplied content
+4. Parse the V3 PROOF payload format (unified 8-field shape for text and media)
+5. User supplies the original content (text) or the exact original file (media)
+6. Calculate SHA-256 hash of the supplied bytes
+7. Calculate byte length of the supplied bytes
 8. Compare both hash and size with on-chain commitment
 
-If both match, the proof is VERIFIED.
+If both match, the proof is VERIFIED. Proof results include the validated
+MIME type and filename so the Viewer can render the correct image/video/audio
+player. Finding an on-chain commitment is NOT the same as verifying the media;
+only a recomputed hash that exactly matches the commitment yields `VERIFIED`.
 
 ## V3 PRIVATE Verification Process
 
@@ -127,12 +130,15 @@ If both match, the proof is VERIFIED.
 4. Parse the V3 PRIVATE payload format
 5. Import the encrypted artifact (user-controlled/off-chain) — paste the canonical
    `HASHDROP-PRIVATE-BLOB|v1|…` string or import the downloaded
-   `hashdrop-private-<hashDropId>.hdp` file (read locally as text; never uploaded)
+   `hashdrop-private-<hashDropId>.hdp` file (read locally as text; never uploaded). The
+   same canonical 13-field envelope (with an explicit object `type`) is used for every
+   content kind; the artifact `version` (schema) is independent of the object `type`.
 6. Verify artifact metadata matches transaction metadata:
    - hashDropId
    - sha256
    - contentSize
-   - mimeType
+   - object `type` (must agree with the MIME type; both are AAD-authenticated)
+   - mimeType (e.g. `image/png`, `video/mp4`, `audio/webm` for media)
    - cryptoVersion
    - keyFingerprint
 7. If metadata does not match: NOT VERIFIED ("Artifact does not belong to this HashDrop")
@@ -148,7 +154,10 @@ If both match, the proof is VERIFIED.
 16. Verify plaintext byte length matches contentSize
 17. Verify plaintext SHA-256 matches on-chain sha256
 
-If all checks pass, the private content is VERIFIED.
+If all checks pass, the private content is VERIFIED. For media, the decrypted
+bytes are rendered with the appropriate viewer (image/video/audio) and the
+original file can be downloaded. If AES-GCM authentication fails, corrupted
+plaintext is never displayed as valid and a clear failure state is returned.
 
 **Important distinctions:**
 - **DECRYPTED** means AES-GCM authentication succeeded

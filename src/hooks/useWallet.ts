@@ -6,9 +6,9 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { PublicKey, VersionedTransaction, Connection } from '@solana/web3.js';
+import { VersionedTransaction, Connection } from '@solana/web3.js';
 
-import { getRpcUrl, getCurrentNetwork, setCurrentNetwork, Network, getNetworkConfig, createConnection, getRpcUrlForLogging } from '../lib/network';
+import { getRpcUrl, getCurrentNetwork, setCurrentNetwork, Network, createConnection, getRpcUrlForLogging } from '../lib/network';
 
 // Transaction result
 export interface TransactionResult {

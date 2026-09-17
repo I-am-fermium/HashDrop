@@ -26,7 +26,6 @@
  */
 
 import { generateAesIv, aesGcmEncrypt, aesGcmDecrypt } from './aesGcm';
-import { deriveKeyEncryptionKey } from './hkdf';
 
 /**
  * Encrypted AES-key envelope
@@ -73,45 +72,4 @@ export async function unwrapAesKey(
   aad?: Uint8Array
 ): Promise<Uint8Array> {
   return aesGcmDecrypt(envelope.encryptedKey, kek, envelope.iv, aad);
-}
-
-/**
- * Wrap a random AES-256 content key using ML-KEM shared secret
- *
- * Convenience function that combines HKDF key derivation and key wrapping.
- *
- * @param contentKey - Random AES-256 content key (32 bytes)
- * @param mlKemSharedSecret - ML-KEM shared secret (32 bytes)
- * @param aad - Additional authenticated data (optional)
- * @returns Encrypted key envelope
- */
-export async function wrapAesKeyWithSharedSecret(
-  contentKey: Uint8Array,
-  mlKemSharedSecret: Uint8Array,
-  keyFingerprint: string,
-  aad?: Uint8Array
-): Promise<AesKeyEnvelope> {
-  const kek = await deriveKeyEncryptionKey(mlKemSharedSecret, keyFingerprint);
-  return wrapAesKey(contentKey, kek, aad);
-}
-
-/**
- * Unwrap a random AES-256 content key using ML-KEM shared secret
- *
- * Convenience function that combines HKDF key derivation and key unwrapping.
- *
- * @param envelope - Encrypted key envelope
- * @param mlKemSharedSecret - ML-KEM shared secret (32 bytes)
- * @param keyFingerprint - ML-KEM public key fingerprint
- * @param aad - Additional authenticated data (must match what was used during wrapping)
- * @returns Random AES-256 content key (32 bytes)
- */
-export async function unwrapAesKeyWithSharedSecret(
-  envelope: AesKeyEnvelope,
-  mlKemSharedSecret: Uint8Array,
-  keyFingerprint: string,
-  aad?: Uint8Array
-): Promise<Uint8Array> {
-  const kek = await deriveKeyEncryptionKey(mlKemSharedSecret, keyFingerprint);
-  return unwrapAesKey(envelope, kek, aad);
 }

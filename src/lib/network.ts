@@ -6,7 +6,6 @@
  */
 
 import { Connection } from '@solana/web3.js';
-import { createSolanaRpc } from '@solana/rpc';
 import type { Rpc } from '@solana/rpc-spec';
 import type { SolanaRpcApi } from '@solana/rpc-api';
 

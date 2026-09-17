@@ -1,7 +1,7 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
-import { Network, getCurrentNetwork, setCurrentNetwork, isMainnet } from '../lib/network';
+import { Network, setCurrentNetwork } from '../lib/network';
 
 interface NetworkSelectorProps {
   currentNetwork: Network;

@@ -113,7 +113,7 @@ describe('PRIVATE Mode Transaction Size Measurement', () => {
     expect(parts[4]).toBe('a'.repeat(64)); // sha256
     expect(parts[5]).toBe('100'); // contentSize
     expect(parts[6]).toBe('text/plain'); // contentType
-    expect(parts[7]).toBe('HD-P1'); // cryptoVersion
+    expect(parts[7]).toBe('HD-P2'); // cryptoVersion
     expect(parts[8]).toBe('aabbccdd11223344'); // keyFingerprint
     // parts[9] = encryptedKeyIv
     // parts[10] = encryptedKey

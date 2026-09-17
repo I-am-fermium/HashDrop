@@ -120,7 +120,7 @@ async function simulatePrivatePublish() {
   const encryptionResult = await encryptPrivateContent(
     new TextEncoder().encode(PLAINTEXT),
     meta.hash,
-    meta.contentType,
+    meta.mimeType,
     keypair.publicKey,
     keyFingerprint,
     meta.hashDropId
@@ -155,8 +155,8 @@ describe('v0 Devnet transaction shape — PRIVATE/PROOF retrieval regression', (
     expect(result.hashDropId).toBe(pub.meta.hashDropId);
     expect(result.contentHash).toBe(pub.meta.hash);
     expect(result.contentSize).toBe(pub.meta.size);
-    expect(result.contentType).toBe(pub.meta.contentType);
-    expect(result.cryptoVersion).toBe('HD-P1');
+    expect(result.contentType).toBe(pub.meta.mimeType);
+    expect(result.cryptoVersion).toBe('HD-P2');
     expect(result.keyFingerprint).toBe(pub.keyFingerprint);
     expect(result.signer).toBe(PUBLISHER);
     expect(mockGetTransaction).toHaveBeenCalledTimes(1);
@@ -186,7 +186,7 @@ describe('v0 Devnet transaction shape — PRIVATE/PROOF retrieval regression', (
 
   it('PROOF: extracts the memo from compiledInstructions and verifies the commitment', async () => {
     const meta = await processContent(PLAINTEXT, PUBLISHER);
-    const proofMemo = encodeProofPayload(meta.hashDropId, meta.hash, meta.size);
+    const proofMemo = encodeProofPayload(meta.hashDropId, meta.hash, meta.size, meta.mimeType, meta.filename);
     mockGetTransaction.mockResolvedValue(devnetV0Transaction(proofMemo));
 
     const result: ProofVerificationResult = await verifyProofDrop(

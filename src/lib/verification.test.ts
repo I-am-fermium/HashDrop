@@ -2,7 +2,7 @@
  * Tests for HashDrop Verification Module (V3 only)
  */
 
-import { verifyPublicDrop, verifyBySignature, PublicVerificationResult } from './verification';
+import { verifyPublicDrop, verifyBySignature } from './verification';
 import { Connection } from '@solana/web3.js';
 
 // Mock connection for unit tests

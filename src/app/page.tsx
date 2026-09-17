@@ -1,19 +1,19 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from 'react';
+import { useState, useEffect, useCallback, useMemo, useSyncExternalStore } from 'react';
 
 import { useWallet, TransactionResult, getConnection } from '../hooks/useWallet';
 import { useCostEstimate } from '../hooks/useCostEstimate';
-import { processContent, ContentMeta } from '../lib/content';
+import { processContent, generateHashDropId } from '../lib/content';
 import { HASHDROP_PRIVATE_CRYPTO_VERSION } from '../lib/memo';
-import { detectTransactionCapabilities, buildPublicTransaction, buildProofDropTransaction, buildPrivateTransaction, serializeTransaction, measurePublicTransactionSize } from '../lib/transactions';
+import { buildPublicTransaction, buildProofDropTransaction, buildPrivateTransaction, serializeTransaction, measurePublicTransactionSize } from '../lib/transactions';
 import { encryptPrivateContent, generateRecipientKeypair, PrivateEncryptionResult } from '../lib/crypto/privateDrop';
-import { generateAesKey, generateAesIv } from '../lib/crypto/aesGcm';
 import { bytesToBase64 } from '../lib/encoding';
 import { exportArtifact } from '../lib/crypto/encryptedArtifact';
 import { exportSecretKey, exportPublicKey } from '../lib/crypto/keyManager';
 import {
   downloadTextFile,
+  downloadBytesFile,
   buildPrivateArtifactFilename,
   buildPrivateKeyFilename,
   buildPublicKeyFilename,
@@ -22,11 +22,12 @@ import {
   PUBLIC_KEY_TEXT_MIME_TYPE,
 } from '../lib/download';
 import { Network, getRpcUrlForLogging, createRpc, getExplorerUrl } from '../lib/network';
+import { ContentKind, ArtifactMeta, processMediaBytes, formatFileSize } from '../lib/media';
 
 import { WalletConnect } from '../components/WalletConnect';
 import { PublishButton } from '../components/PublishButton';
 import { CostSummary } from '../components/CostSummary';
-import { ContentEditor } from '../components/ContentEditor';
+import { ContentInput, MediaSelection } from '../components/ContentInput';
 import { NetworkSelector } from '../components/NetworkSelector';
 
 // Helper function to get network display label based on network state
@@ -61,7 +62,7 @@ interface PrivatePublishRecovery {
   sha256: string;
   contentSize: number;
   mimeType: string;
-  cryptoVersion: string; // HD-P1
+  cryptoVersion: string; // HD-P2
   keyFingerprint: string;
   signer: string;
   signature: string;
@@ -72,12 +73,18 @@ interface PrivatePublishRecovery {
 
 export default function Home() {
   const [content, setContent] = useState('Hello, HashDrop!');
-  const [contentMeta, setContentMeta] = useState<ContentMeta | null>(null);
+  // Processed TEXT artifact (contentKind 'TEXT', filename '') — part of the
+  // unified artifact model; media artifacts live in `mediaSelection.meta`.
+  const [textMeta, setTextMeta] = useState<ArtifactMeta | null>(null);
+  // Current input type (PUBLIC is forced to TEXT).
+  const [contentKind, setContentKind] = useState<ContentKind>('TEXT');
+  // Selected media object (photo/video/voice) — hashed from exact bytes.
+  const [mediaSelection, setMediaSelection] = useState<MediaSelection | null>(null);
+  const [mediaError, setMediaError] = useState<string | null>(null);
   const [publishProgress, setPublishProgress] = useState<number>(0);
   const [lastResult, setLastResult] = useState<TransactionResult | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [mode, setMode] = useState<'public' | 'proof' | 'private'>('public');
-  const [privateKeypair, setPrivateKeypair] = useState<{ publicKey: Uint8Array; secretKey: Uint8Array } | null>(null);
   const [privateKeyExported, setPrivateKeyExported] = useState(false);
   const [artifactExported, setArtifactExported] = useState(false);
   // Recovery artifacts for the last successful PRIVATE publish. Set only
@@ -89,11 +96,6 @@ export default function Home() {
     maxTransactionSize: number;
     version: string;
     availableBytes: number;
-  } | null>(null);
-  const [capabilities, setCapabilities] = useState<{
-    supportsV1: boolean;
-    maxTransactionBytes: number;
-    preferredVersion: string;
   } | null>(null);
 
   // Track mounted state to prevent hydration mismatch
@@ -108,13 +110,13 @@ export default function Home() {
   const { isConnected, publicKey, connect, disconnect, sendTransaction, network, setNetwork } = useWallet();
   const { estimate, calculate } = useCostEstimate(content);
 
-  // Process content when it changes
+  // Process text content when it changes (into the unified artifact model)
   useEffect(() => {
     const processContentData = async () => {
       if (content && content.length > 0) {
         try {
           const meta = await processContent(content, publicKey || 'pending');
-          setContentMeta(meta);
+          setTextMeta(meta);
 
           console.log('[HashDrop] Content processed:', {
             size: meta.size,
@@ -125,11 +127,78 @@ export default function Home() {
           console.error('[HashDrop] Content processing failed:', error);
         }
       } else {
-        setContentMeta(null);
+        setTextMeta(null);
       }
     };
     processContentData();
   }, [content, publicKey]);
+
+  // Derive the currently active artifact for publishing (TEXT or media),
+  // always as the SAME unified ArtifactMeta. The deterministic HashDrop ID is
+  // recalculated from the current creator wallet on every render (no effect,
+  // no re-hash of the media bytes).
+  const publishMeta: ArtifactMeta | null = useMemo(() => {
+    const raw = contentKind === 'TEXT' || mode === 'public' ? textMeta : (mediaSelection?.meta ?? null);
+    if (!raw) return null;
+    const hashDropId = generateHashDropId(raw.hash, publicKey || 'pending', raw.size);
+    if (hashDropId === raw.hashDropId) return raw;
+    return { ...raw, hashDropId };
+  }, [contentKind, mode, textMeta, mediaSelection, publicKey]);
+
+  // PUBLIC mode is TEXT ONLY: never accept a media selection there, and never
+  // let a hidden media selection leak into a Public publication. Returns
+  // whether media state should be cleared (switching to PUBLIC).
+  const handleModeChange = useCallback((nextMode: 'public' | 'proof' | 'private') => {
+    if (nextMode === 'public') {
+      setContentKind('TEXT');
+      setMediaSelection((prev) => {
+        if (prev) URL.revokeObjectURL(prev.objectUrl);
+        return null;
+      });
+      setMediaError(null);
+    }
+    setMode(nextMode);
+  }, []);
+
+  /**
+   * Handle a chosen media file (photo/video picked in the file dialog, or a
+   * synthesized voice-recording File). Reads the exact original bytes once,
+   * validates MIME against the magic-byte signature, and computes the SHA-256
+   * hash. The authoritative original bytes are retained for encryption and
+   * for the proof.
+   */
+  const handleFileChosen = useCallback(
+    async (file: File, _declaredKind: 'IMAGE' | 'VIDEO' | 'AUDIO') => {
+      setMediaError(null);
+      try {
+        const buffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        const declared = file.type || 'application/octet-stream';
+        const meta = await processMediaBytes(bytes, file.name || 'file', declared, publicKey || 'pending');
+        // Revoke any previous preview URL before replacing the selection.
+        setMediaSelection((prev) => {
+          if (prev) URL.revokeObjectURL(prev.objectUrl);
+          return null;
+        });
+        const objectUrl = URL.createObjectURL(new Blob([bytes as BlobPart], { type: meta.mimeType }));
+        setMediaSelection({ file, bytes, meta, objectUrl });
+        setContentKind(meta.contentKind);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to process the selected file.';
+        setMediaError(message);
+        console.error('[HashDrop] Media processing failed:', message);
+      }
+    },
+    [publicKey]
+  );
+
+  const handleMediaRemove = useCallback(() => {
+    setMediaSelection((prev) => {
+      if (prev) URL.revokeObjectURL(prev.objectUrl);
+      return null;
+    });
+    setMediaError(null);
+  }, []);
 
   // Calculate transaction size info and capabilities
   useEffect(() => {
@@ -142,26 +211,18 @@ export default function Home() {
         setTransactionInfo(null);
         return;
       }
-      if (contentMeta && publicKey) {
+      if (textMeta && publicKey) {
         try {
-          // Get transaction capabilities
-          const caps = await detectTransactionCapabilities(getConnection());
-          setCapabilities({
-            supportsV1: caps.supportsV1,
-            maxTransactionBytes: caps.maxTransactionBytes,
-            preferredVersion: caps.preferredVersion,
-          });
-          
           // Measure the EXACT serialized size of the Public transaction that
           // will be submitted, via the same encoding/compilation path as
           // buildPublicTransaction (V3 PUBLIC memo with the real content +
           // platform-fee transfer, compiled to v0). Preview of reality.
           const measured = measurePublicTransactionSize(
             content,
-            contentMeta.hashDropId,
-            contentMeta.hash,
-            'text/plain',
-            contentMeta.size,
+            textMeta.hashDropId,
+            textMeta.hash,
+            textMeta.mimeType,
+            textMeta.size,
             publicKey
           );
           setTransactionInfo({
@@ -176,24 +237,35 @@ export default function Home() {
       }
     };
     calculateInfo();
-  }, [content, contentMeta, publicKey, mode]);
+  }, [content, textMeta, publicKey, mode]);
 
   // Handle publish - show confirmation dialog
   const handlePublish = useCallback(async () => {
-    if (!content || !contentMeta || !publicKey) {
+    const target = publishMeta;
+    if (!target || !publicKey) {
+      setLastResult({
+        success: false,
+        signature: null,
+        error:
+          contentKind === 'TEXT'
+            ? 'Enter content and connect your wallet to publish.'
+            : 'Select a valid file and connect your wallet to publish.',
+        blockTime: null,
+      });
       console.error('[HashDrop] Cannot publish: missing requirements');
       return;
     }
 
     // Show confirmation dialog
     setIsConfirming(true);
-  }, [content, contentMeta, publicKey]);
+  }, [publishMeta, publicKey, contentKind]);
 
-  // Confirm and proceed with publish (Public or Proof Mode)
+  // Confirm and proceed with publish (Public, Proof or Private Mode)
   const confirmAndPublish = useCallback(async () => {
     setIsConfirming(false);
 
-    if (!content || !contentMeta || !publicKey) {
+    const target = publishMeta;
+    if (!target || !publicKey) {
       console.error('[HashDrop] Cannot publish: missing requirements');
       return;
     }
@@ -219,10 +291,12 @@ export default function Home() {
         provider,
       });
 
-      // Get latest blockhash using Solana Kit
-      let blockhashResult;
+      // Get latest blockhash using Solana Kit. This acts as an RPC preflight:
+      // a failed fetch aborts the publish early with a clear error. The mode
+      // builders fetch their own blockhash when assembling the transaction, so
+      // the response body is intentionally not used here.
       try {
-        blockhashResult = await rpc.getLatestBlockhash({ commitment: 'confirmed' }).send();
+        await rpc.getLatestBlockhash({ commitment: 'confirmed' }).send();
       } catch (blockhashError: any) {
         console.error('[HashDrop] getLatestBlockhash failed:', {
           operation: 'getLatestBlockhash',
@@ -234,10 +308,6 @@ export default function Home() {
 
         throw blockhashError;
       }
-
-      // Extract blockhash and lastValidBlockHeight from Solana Kit response
-      const blockhash = blockhashResult.value.blockhash;
-      const lastValidBlockHeight = BigInt(blockhashResult.value.lastValidBlockHeight);
 
       // Build the transaction using web3.js Connection (for Phantom compatibility)
       const connection = getConnection();
@@ -254,35 +324,40 @@ export default function Home() {
         keypair: { publicKey: Uint8Array; secretKey: Uint8Array };
       } | null = null;
       if (mode === 'proof') {
-        // Proof Mode: only the SHA-256 commitment and byte length are stored on-chain.
-        // The original content is NEVER included in the transaction.
+        // Proof Mode: only the SHA-256 commitment, byte length, validated MIME
+        // type and filename are stored on-chain. The original bytes are NEVER
+        // included. The SAME unified memo shape is used for every content kind
+        // (text proofs carry text/plain + '').
         transaction = await buildProofDropTransaction(
-          contentMeta.hashDropId,
-          contentMeta.hash,
-          contentMeta.size,
+          target.hashDropId,
+          target.hash,
+          target.size,
           publicKey,
-          connection
+          connection,
+          target.mimeType,
+          target.filename
         );
       } else if (mode === 'private') {
         // Private Mode: encrypt content locally, store only commitment on-chain
         // Generate ML-KEM-768 keypair for this drop
         const keypair = await generateRecipientKeypair();
-        setPrivateKeypair(keypair);
 
         // Calculate key fingerprint
         const { calculateKeyFingerprint } = require('../lib/crypto/keyManager');
         const keyFingerprint = await calculateKeyFingerprint(keypair.publicKey);
 
-        // Encrypt the content
-        const { stringToBytes } = require('../lib/content');
-        const plaintext = stringToBytes(content);
+        // Encrypt the exact original bytes (text UTF-8 bytes or media bytes).
+        // The AES-256-GCM + ML-KEM-768 + HKDF-SHA-256 architecture is reused
+        // unchanged; the MIME type and filename are carried in the artifact
+        // envelope. The on-chain memo format and AAD remain unchanged.
         const encryptionResult = await encryptPrivateContent(
-          plaintext,
-          contentMeta.hash,
-          contentMeta.contentType,
+          target.bytes,
+          target.hash,
+          target.mimeType,
           keypair.publicKey,
           keyFingerprint,
-          contentMeta.hashDropId
+          target.hashDropId,
+          target.filename
         );
 
         // Keep the exact artifact + keypair used for THIS drop so the user
@@ -293,7 +368,7 @@ export default function Home() {
         // Build private transaction with on-chain commitment only
         // The encrypted artifact is stored off-chain
         transaction = await buildPrivateTransaction(
-          contentMeta.hashDropId,
+          target.hashDropId,
           encryptionResult.plaintextHash,
           encryptionResult.plaintextSize,
           encryptionResult.contentType,
@@ -304,13 +379,13 @@ export default function Home() {
           connection
         );
       } else {
-        // Public Mode: the full content is stored on-chain
+        // Public Mode: TEXT ONLY — the full content is stored on-chain.
         transaction = await buildPublicTransaction(
           content,
-          contentMeta.hashDropId,
-          contentMeta.hash,
+          target.hashDropId,
+          target.hash,
           'text/plain',
-          contentMeta.size,
+          target.size,
           publicKey,
           connection
         );
@@ -375,12 +450,21 @@ export default function Home() {
         blockTime: null,
       });
     }
-  }, [content, contentMeta, publicKey, sendTransaction, network, mode]);
+  }, [publishMeta, publicKey, sendTransaction, network, mode, content]);
 
   // Cancel publish
   const cancelPublish = useCallback(() => {
     setIsConfirming(false);
   }, []);
+
+  // ── PROOF media original-artifact export ────────────────────────────────
+  // PROOF-mode media is zero-backend like everything else in HashDrop: only
+  // the commitment goes on-chain; the original bytes stay with the user. This
+  // lets them save the exact file that was committed.
+  const handleDownloadOriginalMedia = useCallback(() => {
+    if (!mediaSelection) return;
+    downloadBytesFile(mediaSelection.meta.filename, mediaSelection.bytes, mediaSelection.meta.mimeType);
+  }, [mediaSelection]);
 
   // ── PRIVATE publish recovery exports ─────────────────────────────────────
   // Client-side Blob downloads of the exact artifact and ML-KEM-768 keypair
@@ -427,10 +511,10 @@ export default function Home() {
 
   // Update estimate
   useEffect(() => {
-    if (contentMeta) {
+    if (textMeta) {
       calculate(content);
     }
-  }, [calculate, content, contentMeta]);
+  }, [calculate, content, textMeta]);
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B';
@@ -472,10 +556,21 @@ export default function Home() {
       {/* Content Input Section */}
       <section className="bg-gray-900 rounded-lg p-4 mb-6 border border-gray-700">
         <h2 className="text-lg font-semibold mb-3 text-primary">Content</h2>
-        <ContentEditor
+        <ContentInput
+          mode={mode}
           content={content}
           onContentChange={setContent}
-          bytes={contentMeta?.size || 0}
+          contentKind={contentKind}
+          onContentKindChange={(kind) => {
+            setContentKind(kind);
+            setMediaError(null);
+          }}
+          onFileChosen={handleFileChosen}
+          media={mediaSelection}
+          onMediaRemove={handleMediaRemove}
+          bytes={textMeta?.size || 0}
+          mediaError={mediaError}
+          onError={setMediaError}
         />
       </section>
 
@@ -485,7 +580,7 @@ export default function Home() {
         <div className="grid grid-cols-3 gap-2 sm:gap-3">
           <button
             type="button"
-            onClick={() => setMode('public')}
+            onClick={() => handleModeChange('public')}
             className={`p-2 sm:p-3 rounded border text-left transition ${
               mode === 'public'
                 ? 'border-accent bg-accent/10'
@@ -499,7 +594,7 @@ export default function Home() {
           </button>
           <button
             type="button"
-            onClick={() => setMode('proof')}
+            onClick={() => handleModeChange('proof')}
             className={`p-2 sm:p-3 rounded border text-left transition ${
               mode === 'proof'
                 ? 'border-accent bg-accent/10'
@@ -513,7 +608,7 @@ export default function Home() {
           </button>
           <button
             type="button"
-            onClick={() => setMode('private')}
+            onClick={() => handleModeChange('private')}
             className={`p-2 sm:p-3 rounded border text-left transition ${
               mode === 'private'
                 ? 'border-accent bg-accent/10'
@@ -529,17 +624,19 @@ export default function Home() {
         {mode === 'proof' && (
           <div className="mt-3 bg-blue-900/30 border border-blue-600 rounded p-3">
             <p className="text-sm text-blue-300">
-              <strong>Proof Mode:</strong> The original content is NOT stored on-chain.
-              Only its cryptographic proof (SHA-256 hash) and byte length are published.
-              The content never leaves your browser.
+              <strong>Proof Mode:</strong> Text, Photo, Video and Voice are supported.
+              The original content is NOT stored on-chain — only its cryptographic proof
+              (SHA-256 hash), byte length, and content type are published. The content never
+              leaves your browser.
             </p>
           </div>
         )}
         {mode === 'private' && (
           <div className="mt-3 bg-purple-900/30 border border-purple-600 rounded p-3">
             <p className="text-sm text-purple-300">
-              <strong>Private Mode:</strong> Your content is encrypted locally using AES-256-GCM
-              with post-quantum ML-KEM-768 key protection. Only the required key holder can decrypt it.
+              <strong>Private Mode:</strong> Text, Photo, Video and Voice are supported.
+              Your content is encrypted locally using AES-256-GCM with post-quantum ML-KEM-768
+              key protection. Only the required key holder can decrypt it.
               The original content is NEVER stored on-chain.
             </p>
             <p className="text-xs text-purple-400 mt-2">
@@ -555,11 +652,17 @@ export default function Home() {
       <section className="bg-gray-900 rounded-lg p-4 mb-6 border border-gray-700">
         <h2 className="text-lg font-semibold mb-3 text-primary">Hash</h2>
         <div className="font-mono text-xs break-all bg-black p-2 rounded">
-          {contentMeta?.hash || 'SHA256 hash will be calculated after connecting wallet'}
+          {publishMeta?.hash || 'SHA256 hash will be calculated after processing content'}
         </div>
         <div className="mt-2 text-sm text-secondary">
-          HashDrop ID: {contentMeta?.hashDropId || 'Will be generated automatically'}
+          HashDrop ID: {publishMeta?.hashDropId || 'Will be generated automatically'}
         </div>
+        {publishMeta && contentKind !== 'TEXT' && (
+          <div className="mt-2 text-xs text-secondary space-y-1">
+            <div>File: {publishMeta.filename} · {formatFileSize(publishMeta.size)}</div>
+            <div>MIME: {publishMeta.mimeType} · Type: {publishMeta.contentKind}</div>
+          </div>
+        )}
       </section>
 
       {/* Publication Method Selector - Memo Drop Only */}
@@ -581,9 +684,9 @@ export default function Home() {
                       `Content must fit within transaction limits • transaction-based`
                     )
                   ) : mode === 'proof' ? (
-                    `Content is not published on-chain • only the cryptographic proof/commitment and metadata are recorded`
+                    `Content (text or media) is not published on-chain • only the cryptographic proof/commitment and metadata are recorded`
                   ) : (
-                    `Content is encrypted locally (AES-256-GCM + ML-KEM-768) • the original content is never stored on-chain`
+                    `Content (text or media) is encrypted locally (AES-256-GCM + ML-KEM-768) • the original content is never stored on-chain`
                   )}
                 </div>
               </div>
@@ -631,20 +734,37 @@ export default function Home() {
                     {lastResult.signature}
                   </div>
                 </div>
-                {mode === 'proof' && contentMeta && (
+                {mode === 'proof' && publishMeta && (
                   <>
                     <div>
                       <div className="text-xs text-secondary mb-1">Proof Hash (SHA-256)</div>
                       <div className="font-mono text-xs text-accent break-all bg-black p-2 rounded">
-                        {contentMeta.hash}
+                        {publishMeta.hash}
                       </div>
                     </div>
-                    <div className="bg-blue-900/30 border border-blue-600 rounded p-3">
-                      <p className="text-xs text-blue-300">
-                        Save this transaction signature. To verify later, you will need both
-                        the signature and the original content. The content is not stored on-chain.
-                      </p>
-                    </div>
+                    {publishMeta.contentKind === 'TEXT' ? (
+                      <div className="bg-blue-900/30 border border-blue-600 rounded p-3">
+                        <p className="text-xs text-blue-300">
+                          Save this transaction signature. To verify later, you will need both
+                          the signature and the original content. The content is not stored on-chain.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="bg-blue-900/30 border border-blue-600 rounded p-3 space-y-2">
+                        <p className="text-xs text-blue-300">
+                          This Proof commits to {publishMeta.mimeType} · {publishMeta.filename}.
+                          Save the original file below — to verify later you will need this exact
+                          file plus the transaction signature. The media is never stored on-chain.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleDownloadOriginalMedia}
+                          className="px-3 py-1.5 bg-accent text-white font-bold rounded hover:opacity-90 transition text-sm"
+                        >
+                          Download Original Media
+                        </button>
+                      </div>
+                    )}
                   </>
                 )}
                 <div>
@@ -805,8 +925,23 @@ export default function Home() {
 
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-secondary">Content Size:</span>
-                <span className="text-accent">{contentMeta?.size || 0} bytes</span>
+                <span className="text-accent">
+                  {publishMeta?.size || 0} bytes
+                </span>
               </div>
+
+              {publishMeta && contentKind !== 'TEXT' && (
+                <div className="space-y-1 text-xs">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-secondary">File:</span>
+                    <span className="text-accent break-all">{publishMeta.filename}</span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-secondary">Type:</span>
+                    <span className="text-accent">{publishMeta.mimeType} · {publishMeta.contentKind}</span>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-secondary">Transaction Size:</span>
@@ -818,15 +953,15 @@ export default function Home() {
                         : `Too large (${transactionInfo.version.toUpperCase()})`
                       : 'Calculating...'
                     : mode === 'proof'
-                    ? 'Proof/commitment metadata only — original content is not on-chain'
-                    : 'Private/encrypted metadata only — original content is not on-chain'}
+                    ? 'Proof/commitment metadata only — media is not on-chain'
+                    : 'Private/encrypted metadata only — media is not on-chain'}
                 </span>
               </div>
 
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-secondary">HashDrop ID:</span>
                 <span className="font-mono text-xs text-accent break-all">
-                  {contentMeta?.hashDropId?.slice(0, 16)}...
+                  {publishMeta?.hashDropId?.slice(0, 16)}...
                 </span>
               </div>
 
@@ -843,8 +978,9 @@ export default function Home() {
             {mode === 'proof' ? (
               <div className="bg-blue-900/30 border border-blue-600 rounded p-3 mb-4">
                 <p className="text-sm text-blue-300">
-                  <strong>Proof Mode:</strong> Only the SHA-256 hash and byte length will be stored on-chain.
-                  The original content is NEVER published. It remains private in your browser.
+                  <strong>Proof Mode:</strong> Only the SHA-256 hash, byte length, and (for media)
+                  the content type are stored on-chain. The original content is NEVER published.
+                  It remains private in your browser.
                 </p>
               </div>
             ) : mode === 'private' ? (

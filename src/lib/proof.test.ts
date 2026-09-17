@@ -9,7 +9,6 @@ import {
   encodeProofPayload,
   decodeProofPayload,
   isValidProofPayload,
-  encodePublicPayload,
   decodePublicPayload,
   decodeHashDropPayload,
   HASHDROP_PROTOCOL_VERSION,
@@ -131,52 +130,55 @@ describe('Proof Mode - Content Hashing', () => {
 
 describe('Proof Mode - Encoding and Decoding', () => {
   describe('encodeProofPayload', () => {
-    it('should encode a valid V3 PROOF payload', () => {
+    it('should encode a valid V3 PROOF payload (unified 8-field)', () => {
       const hash = 'a'.repeat(64);
-      const result = encodeProofPayload('hd_abc12345', hash, 100);
-      expect(result).toBe(`HASHDROP|v3|PROOF|hd_abc12345|${hash}|100`);
+      const result = encodeProofPayload('hd_abc12345', hash, 100, 'text/plain', '');
+      expect(result).toBe(`HASHDROP|v3|PROOF|hd_abc12345|${hash}|100|text/plain|`);
     });
 
     it('should produce compact output (no redundant fields)', () => {
       const hash = 'a'.repeat(64);
-      const result = encodeProofPayload('hd_abc12345', hash, 100);
+      const result = encodeProofPayload('hd_abc12345', hash, 100, 'image/png', 'photo.png');
       const parts = result.split('|');
-      // Exactly 6 fields: protocol, version, mode, id, hash, size
-      expect(parts.length).toBe(6);
+      // Exactly 8 fields: protocol, version, mode, id, hash, size, contentType, filename
+      expect(parts.length).toBe(8);
     });
 
     it('should NOT include original content in the payload', () => {
       const hash = 'a'.repeat(64);
-      const result = encodeProofPayload('hd_abc12345', hash, 100);
+      const result = encodeProofPayload('hd_abc12345', hash, 100, 'text/plain', '');
       expect(result).not.toContain('secret content');
       expect(result).not.toContain('SGVsbG8'); // base64 of anything
     });
 
-    it('should NOT include mimeType in the payload', () => {
+    it('should include the validated MIME type and filename metadata', () => {
       const hash = 'a'.repeat(64);
-      const result = encodeProofPayload('hd_abc12345', hash, 100);
-      expect(result).not.toContain('text/plain');
+      const media = encodeProofPayload('hd_abc12345', hash, 100, 'audio/webm', 'voice.webm');
+      expect(media).toContain('audio/webm');
+      expect(media).toContain('voice.webm');
+      const text = encodeProofPayload('hd_abc12345', hash, 100, 'text/plain', '');
+      expect(text).toContain('text/plain');
     });
 
     it('should NOT include timestamp/slot/blockTime', () => {
       const hash = 'a'.repeat(64);
-      const result = encodeProofPayload('hd_abc12345', hash, 100);
-      // These would be numeric fields beyond the expected 6
+      const result = encodeProofPayload('hd_abc12345', hash, 100, 'text/plain', '');
+      // These would be numeric fields beyond the expected 8
       const parts = result.split('|');
-      expect(parts.length).toBe(6);
+      expect(parts.length).toBe(8);
     });
 
     it('should handle zero content size', () => {
       const hash = 'a'.repeat(64);
-      const result = encodeProofPayload('hd_abc12345', hash, 0);
-      expect(result).toBe(`HASHDROP|v3|PROOF|hd_abc12345|${hash}|0`);
+      const result = encodeProofPayload('hd_abc12345', hash, 0, 'text/plain', '');
+      expect(result).toBe(`HASHDROP|v3|PROOF|hd_abc12345|${hash}|0|text/plain|`);
     });
   });
 
   describe('decodeProofPayload', () => {
-    it('should decode a valid V3 PROOF payload', () => {
+    it('should decode a valid V3 PROOF payload (unified 8-field)', () => {
       const hash = 'a'.repeat(64);
-      const payload = `HASHDROP|v3|PROOF|hd_abc12345|${hash}|100`;
+      const payload = `HASHDROP|v3|PROOF|hd_abc12345|${hash}|100|text/plain|`;
       const result = decodeProofPayload(payload);
 
       expect(result).not.toBeNull();
@@ -186,11 +188,13 @@ describe('Proof Mode - Encoding and Decoding', () => {
       expect(result?.hashDropId).toBe('hd_abc12345');
       expect(result?.contentHash).toBe(hash);
       expect(result?.contentSize).toBe(100);
+      expect(result?.contentType).toBe('text/plain');
+      expect(result?.filename).toBe('');
     });
 
-    it('should return the correct structure', () => {
+    it('should decode media proof payloads with MIME + filename', () => {
       const hash = 'b'.repeat(64);
-      const payload = `HASHDROP|v3|PROOF|hd_test123|${hash}|256`;
+      const payload = `HASHDROP|v3|PROOF|hd_test123|${hash}|256|video/mp4|clip.mp4`;
       const result = decodeProofPayload(payload);
 
       expect(result).toEqual({
@@ -200,14 +204,27 @@ describe('Proof Mode - Encoding and Decoding', () => {
         hashDropId: 'hd_test123',
         contentHash: hash,
         contentSize: 256,
+        contentType: 'video/mp4',
+        filename: 'clip.mp4',
       });
+    });
+
+    it('rejects the legacy 6-field PROOF memo (no backward compatibility)', () => {
+      const hash = 'a'.repeat(64);
+      expect(decodeProofPayload(`HASHDROP|v3|PROOF|hd_abc|${hash}|100`)).toBeNull();
     });
   });
 
   describe('isValidProofPayload', () => {
     it('should validate correct V3 PROOF payload', () => {
       const hash = 'a'.repeat(64);
-      const payload = `HASHDROP|v3|PROOF|hd_abc12345|${hash}|100`;
+      const payload = `HASHDROP|v3|PROOF|hd_abc12345|${hash}|100|text/plain|`;
+      expect(isValidProofPayload(payload)).toBe(true);
+    });
+
+    it('should validate media proof payloads', () => {
+      const hash = 'a'.repeat(64);
+      const payload = `HASHDROP|v3|PROOF|hd_abc12345|${hash}|100|image/png|photo.png`;
       expect(isValidProofPayload(payload)).toBe(true);
     });
 
@@ -224,58 +241,64 @@ describe('Proof Mode - Encoding and Decoding', () => {
 describe('Proof Mode - Malformed Payload Rejection', () => {
   it('should reject payload with wrong protocol', () => {
     const hash = 'a'.repeat(64);
-    const payload = `OTHER|v3|PROOF|hd_abc|${hash}|100`;
+    const payload = `OTHER|v3|PROOF|hd_abc|${hash}|100|text/plain|`;
     expect(decodeProofPayload(payload)).toBeNull();
   });
 
   it('should reject payload with wrong version', () => {
     const hash = 'a'.repeat(64);
-    const payload = `HASHDROP|v2|PROOF|hd_abc|${hash}|100`;
+    const payload = `HASHDROP|v2|PROOF|hd_abc|${hash}|100|text/plain|`;
     expect(decodeProofPayload(payload)).toBeNull();
   });
 
   it('should reject payload with wrong mode', () => {
     const hash = 'a'.repeat(64);
-    const payload = `HASHDROP|v3|MEMO|hd_abc|${hash}|100`;
+    const payload = `HASHDROP|v3|MEMO|hd_abc|${hash}|100|text/plain|`;
     expect(decodeProofPayload(payload)).toBeNull();
   });
 
   it('should reject payload with too few fields', () => {
-    const payload = 'HASHDROP|v3|PROOF|hd_abc|100';
+    const payload = 'HASHDROP|v3|PROOF|hd_abc|100|text/plain';
     expect(decodeProofPayload(payload)).toBeNull();
   });
 
   it('should reject payload with too many fields', () => {
     const hash = 'a'.repeat(64);
-    const payload = `HASHDROP|v3|PROOF|hd_abc|${hash}|100|extra`;
+    const payload = `HASHDROP|v3|PROOF|hd_abc|${hash}|100|text/plain|x|extra`;
+    expect(decodeProofPayload(payload)).toBeNull();
+  });
+
+  it('should reject payload with missing (empty) contentType', () => {
+    const hash = 'a'.repeat(64);
+    const payload = `HASHDROP|v3|PROOF|hd_abc|${hash}|100||`;
     expect(decodeProofPayload(payload)).toBeNull();
   });
 
   it('should reject payload with invalid hash (not 64 hex chars)', () => {
-    const payload = 'HASHDROP|v3|PROOF|hd_abc|notahexhash|100';
+    const payload = 'HASHDROP|v3|PROOF|hd_abc|notahexhash|100|text/plain|';
     expect(decodeProofPayload(payload)).toBeNull();
   });
 
   it('should reject payload with short hash', () => {
-    const payload = 'HASHDROP|v3|PROOF|hd_abc|abcd1234|100';
+    const payload = 'HASHDROP|v3|PROOF|hd_abc|abcd1234|100|text/plain|';
     expect(decodeProofPayload(payload)).toBeNull();
   });
 
   it('should reject payload with hash containing non-hex characters', () => {
     const hash = 'g'.repeat(64); // 'g' is not hex
-    const payload = `HASHDROP|v3|PROOF|hd_abc|${hash}|100`;
+    const payload = `HASHDROP|v3|PROOF|hd_abc|${hash}|100|text/plain|`;
     expect(decodeProofPayload(payload)).toBeNull();
   });
 
   it('should reject payload with negative content size', () => {
     const hash = 'a'.repeat(64);
-    const payload = `HASHDROP|v3|PROOF|hd_abc|${hash}|-1`;
+    const payload = `HASHDROP|v3|PROOF|hd_abc|${hash}|-1|text/plain|`;
     expect(decodeProofPayload(payload)).toBeNull();
   });
 
   it('should reject payload with non-numeric content size', () => {
     const hash = 'a'.repeat(64);
-    const payload = `HASHDROP|v3|PROOF|hd_abc|${hash}|abc`;
+    const payload = `HASHDROP|v3|PROOF|hd_abc|${hash}|abc|text/plain|`;
     expect(decodeProofPayload(payload)).toBeNull();
   });
 
@@ -284,9 +307,18 @@ describe('Proof Mode - Malformed Payload Rejection', () => {
     expect(decodeProofPayload(payload)).toBeNull();
   });
 
-  it('should accept hash with uppercase hex (case insensitive)', () => {
+  it('should reject uppercase hex (canonical lowercase only)', () => {
+    // HashDrop hashes are canonical lowercase hex (calculateHash emits
+    // lowercase). Uppercase is a different protocol byte string for the same
+    // semantic value, so the strict parser rejects it — no case folding.
     const hash = 'A'.repeat(64);
-    const payload = `HASHDROP|v3|PROOF|hd_abc|${hash}|100`;
+    const payload = `HASHDROP|v3|PROOF|hd_abc|${hash}|100|text/plain|`;
+    expect(decodeProofPayload(payload)).toBeNull();
+  });
+
+  it('should accept canonical lowercase hex', () => {
+    const hash = 'a'.repeat(64);
+    const payload = `HASHDROP|v3|PROOF|hd_abc|${hash}|100|text/plain|`;
     expect(decodeProofPayload(payload)).not.toBeNull();
   });
 });
@@ -331,7 +363,7 @@ describe('Proof Mode - V3 Protocol Tests', () => {
 
 describe('Proof Mode - Unified Decoder (decodeHashDropPayload)', () => {
   it('should decode V3 PUBLIC payload', () => {
-    const payload = 'HASHDROP|v3|PUBLIC|hd_abc12345|hash1234567890abcdef|text/plain|100|SGVsbG8=';
+    const payload = `HASHDROP|v3|PUBLIC|hd_abc12345|${'a'.repeat(64)}|text/plain|100|SGVsbG8=`;
     const result = decodeHashDropPayload(payload);
     expect(result).not.toBeNull();
     expect(result?.version).toBe('v3');
@@ -340,7 +372,7 @@ describe('Proof Mode - Unified Decoder (decodeHashDropPayload)', () => {
 
   it('should decode V3 PROOF payload', () => {
     const hash = 'a'.repeat(64);
-    const payload = `HASHDROP|v3|PROOF|hd_abc|${hash}|100`;
+    const payload = `HASHDROP|v3|PROOF|hd_abc|${hash}|100|text/plain|`;
     const result = decodeHashDropPayload(payload);
     expect(result).not.toBeNull();
     expect(result?.version).toBe('v3');
@@ -371,7 +403,7 @@ describe('Proof Mode - Verification Logic (Round-Trip)', () => {
     const hashDropId = generateHashDropId(hash, 'TestCreator', size);
 
     // Encode the proof
-    const proofPayload = encodeProofPayload(hashDropId, hash, size);
+    const proofPayload = encodeProofPayload(hashDropId, hash, size, 'text/plain', '');
 
     // Decode and verify
     const decoded = decodeProofPayload(proofPayload);
@@ -410,7 +442,7 @@ describe('Proof Mode - Verification Logic (Round-Trip)', () => {
     expect(wrongSize).not.toBe(correctSize);
 
     // The verification would compare sizes and fail
-    const proofPayload = encodeProofPayload('hd_test', hash, correctSize);
+    const proofPayload = encodeProofPayload('hd_test', hash, correctSize, 'text/plain', '');
     const decoded = decodeProofPayload(proofPayload);
     expect(decoded!.contentSize).toBe(correctSize);
     expect(decoded!.contentSize).not.toBe(wrongSize);
@@ -433,7 +465,7 @@ describe('Proof Mode - Verification Logic (Round-Trip)', () => {
     const size = bytes.length;
 
     const hashDropId = generateHashDropId(hash, 'Creator', size);
-    const proofPayload = encodeProofPayload(hashDropId, hash, size);
+    const proofPayload = encodeProofPayload(hashDropId, hash, size, 'text/plain', '');
 
     const decoded = decodeProofPayload(proofPayload);
     expect(decoded).not.toBeNull();
@@ -451,7 +483,7 @@ describe('Proof Mode - Verification Logic (Round-Trip)', () => {
     const size = bytes.length;
 
     const hashDropId = generateHashDropId(hash, 'Creator', size);
-    const proofPayload = encodeProofPayload(hashDropId, hash, size);
+    const proofPayload = encodeProofPayload(hashDropId, hash, size, 'text/plain', '');
 
     const decoded = decodeProofPayload(proofPayload);
     expect(decoded).not.toBeNull();
@@ -470,7 +502,7 @@ describe('Proof Mode - Verification Logic (Round-Trip)', () => {
     expect(size).toBe(0);
 
     const hashDropId = generateHashDropId(hash, 'Creator', size);
-    const proofPayload = encodeProofPayload(hashDropId, hash, size);
+    const proofPayload = encodeProofPayload(hashDropId, hash, size, 'text/plain', '');
 
     const decoded = decodeProofPayload(proofPayload);
     expect(decoded).not.toBeNull();

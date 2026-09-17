@@ -57,56 +57,64 @@ import { encapsulate, decapsulate, MlKemKeypair } from './mlKem';
 import { wrapAesKey, unwrapAesKey, AesKeyEnvelope } from './keyWrapper';
 import { deriveKeyEncryptionKey } from './hkdf';
 import { createArtifact, EncryptedArtifact } from './encryptedArtifact';
-import { utf8ToBytes, bytesToUtf8 } from '../encoding';
+import { utf8ToBytes } from '../encoding';
 
 // AAD construction constants
 const KEY_ENVELOPE_AAD_PREFIX = 'HASHDROP-PRIVATE-KEY|v1|';
 const CONTENT_AAD_PREFIX = 'HASHDROP-PRIVATE-BLOB|v1|';
 
-// Crypto version for PRIVATE mode
-const HASHDROP_PRIVATE_CRYPTO_VERSION = 'HD-P1';
+// Crypto version for PRIVATE mode (must match src/lib/memo.ts)
+const HASHDROP_PRIVATE_CRYPTO_VERSION = 'HD-P2';
 
 /**
- * Construct canonical key-envelope AAD from immutable on-chain metadata
- * Format: HASHDROP-PRIVATE-KEY|v1|<hashDropId>|<sha256>|<contentSize>|<mimeType>|<cryptoVersion>|<keyFingerprint>
+ * Construct canonical key-envelope AAD from immutable on-chain metadata.
+ * The object TYPE is authenticated alongside the commitment fields so that a
+ * tampered type/MIME combination is detected at AES-GCM authentication time.
+ * Format: HASHDROP-PRIVATE-KEY|v1|<hashDropId>|<sha256>|<contentSize>|<objectType>|<mimeType>|<cryptoVersion>|<keyFingerprint>
  */
 function constructKeyEnvelopeAAD(params: {
   hashDropId: string;
   contentHash: string;
   contentSize: number;
+  objectType: string;
   contentType: string;
   cryptoVersion: string;
   keyFingerprint: string;
 }): Uint8Array {
-  const aad = `${KEY_ENVELOPE_AAD_PREFIX}${params.hashDropId}|${params.contentHash}|${params.contentSize}|${params.contentType}|${params.cryptoVersion}|${params.keyFingerprint}`;
+  const aad = `${KEY_ENVELOPE_AAD_PREFIX}${params.hashDropId}|${params.contentHash}|${params.contentSize}|${params.objectType}|${params.contentType}|${params.cryptoVersion}|${params.keyFingerprint}`;
   return utf8ToBytes(aad);
 }
 
 /**
- * Construct canonical content-artifact AAD from immutable on-chain metadata
- * Format: HASHDROP-PRIVATE-BLOB|v1|<hashDropId>|<sha256>|<contentSize>|<mimeType>|<cryptoVersion>|<keyFingerprint>
+ * Construct canonical content-artifact AAD from immutable on-chain metadata.
+ * Format: HASHDROP-PRIVATE-BLOB|v1|<hashDropId>|<sha256>|<contentSize>|<objectType>|<mimeType>|<cryptoVersion>|<keyFingerprint>
  */
 function constructContentAAD(params: {
   hashDropId: string;
   contentHash: string;
   contentSize: number;
+  objectType: string;
   contentType: string;
   cryptoVersion: string;
   keyFingerprint: string;
 }): Uint8Array {
-  const aad = `${CONTENT_AAD_PREFIX}${params.hashDropId}|${params.contentHash}|${params.contentSize}|${params.contentType}|${params.cryptoVersion}|${params.keyFingerprint}`;
+  const aad = `${CONTENT_AAD_PREFIX}${params.hashDropId}|${params.contentHash}|${params.contentSize}|${params.objectType}|${params.contentType}|${params.cryptoVersion}|${params.keyFingerprint}`;
   return utf8ToBytes(aad);
 }
 
-// Internal type for encryption result (includes mlKemCiphertext for decryption)
-interface PrivateEncryptionResultInternal {
-  plaintextHash: string;
-  plaintextSize: number;
-  contentType: string;
-  encryptedArtifact: EncryptedArtifact;
-  encryptedKeyEnvelope: AesKeyEnvelope;
-  keyFingerprint: string;
-  mlKemCiphertext: Uint8Array;
+/**
+ * Derive the canonical artifact object type from a validated MIME type.
+ * The object type is a deterministic function of the MIME type, so it can be
+ * reconstructed exactly during decryption without being stored on-chain.
+ * @throws Error when the MIME type is not a supported HashDrop type
+ */
+export function objectTypeFromMime(contentType: string): string {
+  const { classifyMimeType } = require('../media');
+  const kind = classifyMimeType(contentType);
+  if (!kind) {
+    throw new Error(`Unsupported artifact MIME type: ${contentType ?? 'unknown'}`);
+  }
+  return kind;
 }
 
 /**
@@ -115,12 +123,13 @@ interface PrivateEncryptionResultInternal {
 export interface PrivateEncryptionResult {
   hashDropId: string; // HashDrop ID (for AAD binding)
   plaintextHash: string; // SHA-256 of original plaintext (hex)
-  plaintextSize: number; // Original UTF-8 byte length
+  plaintextSize: number; // Original byte length
   contentType: string; // MIME type of original content
   encryptedArtifact: EncryptedArtifact; // IV + ciphertext (off-chain)
   encryptedKeyEnvelope: AesKeyEnvelope; // Encrypted AES key (on-chain)
   keyFingerprint: string; // Fingerprint of ML-KEM public key (on-chain)
   mlKemCiphertext: Uint8Array; // ML-KEM ciphertext (needed for decryption)
+  filename: string; // sanitized original filename ('' when none; artifact only)
 }
 
 /**
@@ -164,6 +173,10 @@ export interface PrivateDecryptionResult {
  * @param contentType - MIME type
  * @param recipientPublicKey - ML-KEM-768 recipient public key
  * @param keyFingerprint - Fingerprint of recipient public key
+ * @param hashDropId - Authenticated HashDrop identifier
+ * @param filename - Optional original filename (stored only in the
+ *                   off-chain artifact envelope, never in the on-chain memo
+ *                   and never in the AAD; defaults to '')
  * @returns Encryption result containing artifact and key envelope
  */
 export async function encryptPrivateContent(
@@ -172,14 +185,16 @@ export async function encryptPrivateContent(
   contentType: string,
   recipientPublicKey: Uint8Array,
   keyFingerprint: string,
-  hashDropId: string
+  hashDropId: string,
+  filename?: string
 ): Promise<PrivateEncryptionResult> {
   // Step 1: Generate random AES-256 content key (independently random)
   const aesContentKey = generateAesKey();
 
-  // Step 2: Generate random 96-bit IVs (independently generated)
+  // Step 2: Generate a random 96-bit IV for content encryption. The key-envelope
+  // IV is generated independently inside wrapAesKey (fresh, never reused, never
+  // shared with the content IV).
   const contentIv = generateAesIv();
-  const envelopeIv = generateAesIv();
 
   // Step 3: Encapsulate with ML-KEM-768 public key
   const { ciphertext: mlKemCiphertext, sharedSecret } = await encapsulate(recipientPublicKey);
@@ -187,11 +202,15 @@ export async function encryptPrivateContent(
   // Step 4: Derive KEK via HKDF-SHA-256 from shared secret
   const kek = await deriveKeyEncryptionKey(sharedSecret, keyFingerprint);
 
-  // Step 5: Construct AAD bindings
+  // Step 5: Construct AAD bindings (object type is authenticated with the
+  // commitment fields, so a tampered type/MIME is rejected at GCM time)
+  const objectType = objectTypeFromMime(contentType);
+
   const contentAad = constructContentAAD({
     hashDropId,
     contentHash: plaintextHash,
     contentSize: plaintext.length,
+    objectType,
     contentType,
     cryptoVersion: HASHDROP_PRIVATE_CRYPTO_VERSION,
     keyFingerprint,
@@ -201,6 +220,7 @@ export async function encryptPrivateContent(
     hashDropId,
     contentHash: plaintextHash,
     contentSize: plaintext.length,
+    objectType,
     contentType,
     cryptoVersion: HASHDROP_PRIVATE_CRYPTO_VERSION,
     keyFingerprint,
@@ -215,8 +235,10 @@ export async function encryptPrivateContent(
       hashDropId,
       contentHash: plaintextHash,
       contentSize: plaintext.length,
+      type: objectType as 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO',
       contentType,
       keyFingerprint,
+      filename,
     },
     mlKemCiphertext,
     contentIv,
@@ -235,6 +257,7 @@ export async function encryptPrivateContent(
     encryptedKeyEnvelope,
     keyFingerprint,
     mlKemCiphertext,
+    filename: filename || '',
   };
 }
 
@@ -260,11 +283,22 @@ export async function decryptPrivateContent(
   // Step 2: Derive KEK via HKDF-SHA-256 from shared secret
   const kek = await deriveKeyEncryptionKey(sharedSecret, request.keyFingerprint);
 
-  // Step 3: Reconstruct AAD bindings (must match encryption exactly)
+  // Step 3: Reconstruct AAD bindings (must match encryption exactly).
+  // The object type is a deterministic function of the on-chain MIME type, so
+  // it is reconstructed rather than stored on-chain.
+  const objectType = objectTypeFromMime(request.contentType);
+
+  // Defense in depth: the artifact's own type field must not contradict the
+  // reconstructed type (the artifact→memo binding is checked by the verifier).
+  if (request.encryptedArtifact.type && request.encryptedArtifact.type !== objectType) {
+    throw new Error('Artifact type does not match the on-chain MIME type.');
+  }
+
   const keyEnvelopeAad = constructKeyEnvelopeAAD({
     hashDropId: request.hashDropId,
     contentHash: request.expectedHash,
     contentSize: request.expectedSize,
+    objectType,
     contentType: request.contentType,
     cryptoVersion: HASHDROP_PRIVATE_CRYPTO_VERSION,
     keyFingerprint: request.keyFingerprint,
@@ -274,6 +308,7 @@ export async function decryptPrivateContent(
     hashDropId: request.hashDropId,
     contentHash: request.expectedHash,
     contentSize: request.expectedSize,
+    objectType,
     contentType: request.contentType,
     cryptoVersion: HASHDROP_PRIVATE_CRYPTO_VERSION,
     keyFingerprint: request.keyFingerprint,

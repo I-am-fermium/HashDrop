@@ -10,10 +10,9 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Connection, PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js';
+import { Connection, Transaction, VersionedTransaction } from '@solana/web3.js';
 
-import { getRpcUrl, getCurrentNetwork, setCurrentNetwork, Network, getNetworkConfig, createConnection, getRpcUrlForLogging } from '../lib/network';
-import { getConnection } from '../lib/solana/networkCost';
+import { getRpcUrl, getCurrentNetwork, setCurrentNetwork, Network, createConnection, getRpcUrlForLogging } from '../lib/network';
 
 // Network configuration
 export const GET_CURRENT_ENDPOINT = (): string => {

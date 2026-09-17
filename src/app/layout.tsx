@@ -1,12 +1,7 @@
 import '../styles/globals.css';
-import { Inter } from 'next/font/google';
+import type { Metadata } from 'next';
 
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-});
-
-export const metadata = {
+export const metadata: Metadata = {
   title: 'HashDrop',
   description: 'Decentralized on-chain content publishing',
 };

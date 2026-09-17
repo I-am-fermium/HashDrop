@@ -70,6 +70,49 @@ Responsibilities:
 
 Temporary browser memory is permitted while creating a drop.
 
+## Media Content (PROOF / PRIVATE)
+
+HashDrop supports PHOTO / VIDEO / VOICE (audio) objects in PROOF and PRIVATE
+modes through a unified content abstraction (`src/lib/media.ts`). PUBLIC mode
+remains TEXT ONLY and is byte-compatible.
+
+```
+PUBLIC  -> TEXT ONLY (existing implementation unchanged)
+PROOF   -> TEXT + PHOTO + VIDEO + VOICE
+PRIVATE -> TEXT + PHOTO + VIDEO + VOICE
+```
+
+Content descriptor per media object:
+
+```text
+contentKind  (IMAGE | VIDEO | AUDIO)
+mimeType     (validated against magic bytes — never trusted from the client)
+filename     (sanitized, no '|')
+size         (exact byte length)
+sha256       (SHA-256 of the EXACT original bytes)
+```
+
+- Hashes are always `SHA-256(original bytes)`. No previews, transcodes,
+  recompressions, or Base64/JSON wrappers are hashed.
+- MIME types are validated against file signatures (JPEG/PNG/WebP/GIF, MP4/
+  WebM/QuickTime, OGG/WAV/MP3/WebM-audio). Cross-kind spoofing is rejected.
+- `MAX_MEDIA_FILE_BYTES = 100 MB` (configurable) — files above the cap fail
+  cleanly before hashing.
+- Large media never enters a Solana memo.
+
+**PROOF media** uses the unified memo
+(`...PROOF|hashDropId|sha256|size|contentType|filename`) carrying only the
+commitment + type + artifact reference; the same shape is used for TEXT (with
+`text/plain` + `''`). The original file stays with the user.
+
+**PRIVATE media** reuses the exact AES-256-GCM + ML-KEM-768 + HKDF-SHA-256
+architecture with an unchanged 11-field memo. The encrypted artifact envelope
+is a single canonical 13-field format carrying an explicit object `type`
+(`TEXT | IMAGE | VIDEO | AUDIO`) alongside filename/MIME/size; the artifact
+**version** (`v1`, the schema) is independent of the object **type**. The
+object type is authenticated via AAD, and filenames are sanitized at import —
+there is no v1/v2 split.
+
 ## Solana
 
 Solana holds the canonical ON-CHAIN record.

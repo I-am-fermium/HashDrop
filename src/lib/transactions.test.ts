@@ -150,9 +150,7 @@ describe('HashDrop Transaction Builder platform fee', () => {
 // Proof Mode (V3) Transaction Construction Tests
 // ============================================================
 
-import { encodeProofPayload } from './memo';
-
-const PROOF_PAYLOAD = 'HASHDROP|v3|PROOF|hd_abc12345|' + 'a'.repeat(64) + '|100';
+const PROOF_PAYLOAD = 'HASHDROP|v3|PROOF|hd_abc12345|' + 'a'.repeat(64) + '|100|text/plain|';
 
 /** Build a Proof Mode transaction exactly as the proof publish path does. */
 function buildProofTx(): VersionedTransaction {
@@ -245,8 +243,8 @@ describe('HashDrop Proof Mode Transaction Construction', () => {
     // The memo should be the compact proof payload, NOT contain any original content
     expect(memoText).toBe(PROOF_PAYLOAD);
     expect(memoText).toContain('HASHDROP|v3|PROOF|');
-    // Should NOT contain base64-encoded content (which V2 would have)
-    expect(memoText.split('|').length).toBe(6);
+    // Should NOT contain base64-encoded content (which the PUBLIC memo would)
+    expect(memoText.split('|').length).toBe(8);
   });
 
   it('should produce a compact memo (no base64 content blob)', () => {
@@ -262,13 +260,12 @@ describe('HashDrop Proof Mode Transaction Construction', () => {
 
     const memoText = Buffer.from(proofMemoIx.data).toString('utf8');
 
-    // Proof memo has exactly 6 fields (no base64 content blob, no mimeType)
+    // Unified proof memo has exactly 8 fields (no base64 content blob):
+    // protocol, version, mode, id, hash, size, contentType, filename
     const parts = memoText.split('|');
-    expect(parts.length).toBe(6);
+    expect(parts.length).toBe(8);
 
     // The memo should NOT contain any base64-encoded content
-    // V2 memo would have 8 fields with the last being base64 content
-    // V3 proof memo has only 6 fields: protocol, version, mode, id, hash, size
     expect(parts[0]).toBe('HASHDROP');
     expect(parts[1]).toBe('v3');
     expect(parts[2]).toBe('PROOF');

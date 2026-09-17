@@ -1,30 +1,14 @@
 /**
  * HashDrop Content Engine
  * Handles byte counting, hashing, content type detection, and HashDrop ID generation
+ *
+ * Text content is handled through the SAME unified artifact model as media
+ * (src/lib/artifact.ts): processContent returns an ArtifactMeta whose
+ * contentKind is always 'TEXT'.
  */
 
 import * as crypto from 'crypto';
-
-export interface ContentMeta {
-  bytes: Uint8Array;
-  hash: string;
-  size: number;
-  contentType: string;
-  hashDropId: string;
-}
-
-/**
- * Supported content types for V1
- */
-export const SUPPORTED_CONTENT_TYPES: Record<string, string> = {
-  'text/plain': 'Plain Text',
-  'text/javascript': 'JavaScript',
-  'text/typescript': 'TypeScript',
-  'application/json': 'JSON',
-  'text/markdown': 'Markdown',
-  'text/html': 'HTML',
-  'text/css': 'CSS',
-};
+import type { ArtifactMeta } from './artifact';
 
 /**
  * Detect content type based on file extension or content
@@ -54,17 +38,17 @@ export function detectContentType(content: string): string {
 }
 
 /**
- * Calculate SHA-256 hash of content
- * Uses Node.js crypto in server environment, Web Crypto API in browser
+ * Calculate SHA-256 hash of the EXACT byte sequence passed in.
+ * Uses Web Crypto API in browser environments, Node.js crypto otherwise.
+ *
+ * The input `Uint8Array` is passed directly to the digest primitive (a
+ * typed-array BufferSource), so large media files are NOT additionally copied
+ * into a second buffer before hashing.
  */
 export async function calculateHash(bytes: Uint8Array): Promise<string> {
   // Check if we're in a browser environment with Web Crypto API
   if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
-    const arrayBuffer = new ArrayBuffer(bytes.length);
-    const view = new Uint8Array(arrayBuffer);
-    view.set(bytes);
-    
-    const hashBuffer = await window.crypto.subtle.digest('SHA-256', arrayBuffer);
+    const hashBuffer = await window.crypto.subtle.digest('SHA-256', bytes as unknown as BufferSource);
     const hashArray = new Uint8Array(hashBuffer);
     const hashHex = Array.from(hashArray)
       .map(b => b.toString(16).padStart(2, '0'))
@@ -97,19 +81,22 @@ export function generateHashDropId(hash: string, creator: string, contentSize: n
 }
 
 /**
- * Full content processing - calculates all metadata
+ * Full content processing - calculates all artifact metadata for TEXT input.
+ * Returns the unified ArtifactMeta (contentKind 'TEXT', filename '').
  */
-export async function processContent(content: string, creator: string): Promise<ContentMeta> {
+export async function processContent(content: string, creator: string): Promise<ArtifactMeta> {
   const bytes = stringToBytes(content);
   const hash = await calculateHash(bytes);
-  const contentType = detectContentType(content);
+  const mimeType = detectContentType(content);
   const hashDropId = generateHashDropId(hash, creator, bytes.length);
 
   return {
     bytes,
     hash,
     size: bytes.length,
-    contentType,
+    mimeType,
+    contentKind: 'TEXT',
+    filename: '',
     hashDropId,
   };
 }

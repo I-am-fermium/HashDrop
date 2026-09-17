@@ -10,7 +10,7 @@
  * DO NOT make any fixes - this is for diagnostics only.
  */
 
-import { Connection, PublicKey } from '@solana/web3.js';
+import { Connection } from '@solana/web3.js';
 import * as bs58 from 'bs58';
 
 // Known-good transaction from the task
@@ -113,7 +113,6 @@ describe('HashDrop Legacy V2 Retrieval Diagnostic', () => {
     console.log('');
     console.log('[STEP 4] Memo program ID resolution...');
 
-    const memoProgramId = new PublicKey(MEMO_PROGRAM_ID);
     console.log('[HD DEBUG] Expected MEMO_PROGRAM_ID:', MEMO_PROGRAM_ID);
     console.log('[HD DEBUG] Account keys:', accountKeys?.map((k: any) => k?.toBase58?.() ?? k));
 

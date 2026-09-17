@@ -56,6 +56,33 @@ export function downloadTextFile(
 }
 
 /**
+ * Trigger a client-side file download of binary bytes.
+ *
+ * Used to save recovered/original media artifacts (proof originals, decrypted
+ * private media) and raw byte payloads. Pure client-side Blob download — no
+ * fetch, no server request.
+ *
+ * @param filename - Suggested download filename
+ * @param bytes - Raw bytes to save
+ * @param mimeType - MIME type for the Blob
+ */
+export function downloadBytesFile(
+  filename: string,
+  bytes: Uint8Array,
+  mimeType: string = 'application/octet-stream'
+): void {
+  const blob = new Blob([bytes as BlobPart], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+/**
  * Filename for an encrypted PRIVATE artifact export.
  * e.g. hashdrop-private-hd_ab12cd34_wallet_1t.hdp
  */

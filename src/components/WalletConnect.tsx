@@ -1,5 +1,4 @@
 'use client';
-import { useState } from 'react';
 
 // Use address string instead of PublicKey for Kit compatibility
 type Address = string;

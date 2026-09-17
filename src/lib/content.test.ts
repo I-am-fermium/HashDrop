@@ -118,7 +118,9 @@ describe('Content Engine', () => {
       expect(result.bytes.length).toBe(content.length);
       expect(result.hash).toHaveLength(64);
       expect(result.size).toBe(content.length);
-      expect(result.contentType).toBe('text/typescript');
+      expect(result.mimeType).toBe('text/typescript');
+      expect(result.contentKind).toBe('TEXT');
+      expect(result.filename).toBe('');
       expect(result.hashDropId).toContain('hd_');
     });
 

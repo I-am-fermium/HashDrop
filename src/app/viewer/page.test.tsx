@@ -136,7 +136,7 @@ async function publicMemo(): Promise<string> {
 
 async function proofMemo(): Promise<string> {
   const hash = await calculateHash(CONTENT_BYTES);
-  return encodeProofPayload('HDIDPROOF000001', hash, CONTENT_BYTES.length);
+  return encodeProofPayload('HDIDPROOF000001', hash, CONTENT_BYTES.length, 'text/plain', '');
 }
 
 async function privateMemo(): Promise<string> {
@@ -409,7 +409,7 @@ describe('Viewer page (/viewer) — V3 UI render path', () => {
     expectVisible('MIME Type');
     expectVisible('text/plain');
     expectVisible('Crypto Version');
-    expectVisible('HD-P1');
+    expectVisible('HD-P2');
     expectVisible('Key Fingerprint');
     expectVisible('aabbccddeeff0011');
     expectVisible('Published By');
@@ -510,7 +510,7 @@ describe('Viewer page (/viewer) — V3 UI render path', () => {
     // string and must land in the existing artifact input state.
     const artifactEnvelope =
       'HASHDROP-PRIVATE-BLOB|v1|HDIDPRIVATE0001|' + 'c'.repeat(64) +
-      '|18|text/plain|HD-P1|aabbccddeeff0011|QUJDREVGRw==|QUJDREVGR0hJSktMTU5PUg==|QUJDREVGR0hJSktMTU5PUg==';
+      '|18|text/plain|HD-P2|aabbccddeeff0011|QUJDREVGRw==|QUJDREVGR0hJSktMTU5PUg==|QUJDREVGR0hJSktMTU5PUg==';
     const artifactFile = new File([artifactEnvelope], 'hashdrop-private-HDIDPRIVATE0001.hdp', {
       type: 'application/octet-stream',
     });
@@ -568,7 +568,7 @@ describe('Viewer page (/viewer) — V3 UI render path', () => {
     // still-working paste path, and a structurally valid key envelope.
     const tamperedArtifact =
       'HASHDROP-PRIVATE-BLOB|v1|HDIDPRIVATE0001|' + 'c'.repeat(64) +
-      '|18|text/plain|HD-P1|aabbccddeeff0011|QUJDREVGRw==|QUJDREVGR0hJSktMTU5PUg==|QUJDREVGR0hJSktMTU5PUgx';
+      '|18|text/plain|HD-P2|aabbccddeeff0011|QUJDREVGRw==|QUJDREVGR0hJSktMTU5PUg==|QUJDREVGR0hJSktMTU5PUgx';
     const keyEnvelope = 'HASHDROP-KEY|v1|ML-KEM-768|AAECAwQFBgcICQ==';
 
     mockedImportSecretKey.mockReturnValue(new Uint8Array(32));

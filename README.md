@@ -8,6 +8,10 @@ HashDrop is a browser-native decentralized publishing application that follows t
 
 Users can publish small text and source-code assets without creating an account, connect a Solana wallet, see transparent costs, publish bytes into Solana accounts, finalize the record, and later reconstruct and verify the exact same bytes directly from Solana.
 
+**Proof and Private modes also support PHOTO, VIDEO and VOICE (audio) media.**
+Public mode remains TEXT ONLY (unchanged). See [docs/MEDIA.md](docs/MEDIA.md)
+for the full media architecture.
+
 ## Features
 
 - **No accounts**: Publish directly with your Solana wallet
@@ -15,6 +19,8 @@ Users can publish small text and source-code assets without creating an account,
 - **On-chain storage**: Content is stored directly in Solana transaction memos
 - **Cryptographic verification**: Verify content hash matches published data
 - **Memo Drop**: For small content, uses SPL Memo program, no storage account needed
+- **Media support (Proof/Private)**: Photo (JPEG/PNG/WebP/GIF), Video (MP4/WebM/QuickTime), Voice/audio (WebM/OGG/WAV/MP3/MP4) — hashed from the exact original bytes, kept off-chain
+- **Voice recording**: Browser MediaRecorder for Proof/Private voice notes
 - **Real platform fee**: 0.001 SOL is transferred on-chain to the HashDrop fee wallet via a `SystemProgram.transfer` instruction inside the publish transaction
 - **Production favicon**: App Router `src/app/icon.svg` (red "H" brand mark)
 

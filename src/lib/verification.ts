@@ -6,12 +6,13 @@
  * Supports legacy, v0, and v1 transactions
  */
 
-import { Connection, PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js';
+import { Connection, PublicKey } from '@solana/web3.js';
 import * as bs58 from 'bs58';
 import { calculateHash, stringToBytes } from './content';
-import { decodePublicPayload, decodeProofPayload, decodePrivatePayload, isValidPublicPayload, isValidProofPayload, isValidPrivatePayload, MEMO_PROGRAM_ID, HASHDROP_PROTOCOL_VERSION, ProofPayload, PublicPayload, PrivatePayload } from './memo';
+import { decodePublicPayload, decodeProofPayload, decodePrivatePayload, isValidPublicPayload, isValidProofPayload, isValidPrivatePayload, MEMO_PROGRAM_ID, HASHDROP_PROTOCOL_VERSION } from './memo';
 import { base64ToUtf8, utf8ToBytes, base64ToBytes } from './encoding';
-import { getNetworkDisplay, getCurrentNetwork } from './network';
+import { classifyMimeType } from './media';
+import { getNetworkDisplay } from './network';
 
 // Handle bs58 v6+ API change - decode is now on default export
 const bs58Decode = (bs58 as any).default?.decode || (bs58 as any).decode;
@@ -32,8 +33,10 @@ export interface PublicVerificationResult {
   error: string | null;
   version?: string;
   mode?: string;
-  cryptoVersion?: string; // PRIVATE mode: crypto construction version (e.g., "HD-P1")
+  cryptoVersion?: string; // PRIVATE mode: crypto construction version (e.g., "HD-P2")
   keyFingerprint?: string; // PRIVATE mode: ML-KEM public key fingerprint
+  mimeType?: string; // PROOF media drops: validated MIME type from the memo
+  filename?: string; // PROOF media drops: sanitized original filename from the memo
   transactionVersion?: 'legacy' | 'v0' | 'v1';
   needsContent?: boolean;
 }
@@ -59,6 +62,8 @@ export interface ProofVerificationResult {
   version: string;
   mode: string;
   transactionVersion?: 'legacy' | 'v0' | 'v1';
+  mimeType?: string; // validated MIME type (media proof payloads only)
+  filename?: string; // sanitized original filename (media proof payloads only)
 }
 
 /**
@@ -79,6 +84,9 @@ export interface PrivateVerificationResult {
   calculatedSize: number;
   contentType: string;
   plaintext: string | null; // Decrypted plaintext (only if verified)
+  plaintextBytes?: Uint8Array | null; // Decrypted exact original bytes (media drops)
+  filename?: string; // Original filename from the off-chain artifact (if present)
+  mimeType?: string; // MIME type of the original content
   signature: string;
   signer?: string; // Fee payer / publisher wallet address (base58)
   error: string | null;
@@ -131,19 +139,6 @@ function decodeInstructionData(data: any): string {
   }
   
   return '';
-}
-
-/**
- * Try to get public key from various formats
- */
-function getPublicKey(value: any): PublicKey | null {
-  if (value === null || value === undefined) return null;
-  
-  try {
-    return new PublicKey(value);
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -281,7 +276,6 @@ export async function verifyPublicDrop(
     console.log('[HashDrop Retrieve] Transaction version:', transactionVersion);
     
     // Find memo instruction
-    const memoProgramId = new PublicKey(MEMO_PROGRAM_ID);
     let foundMemo = false;
     let memoData = '';
     let resolvedProgramId: string | undefined;
@@ -396,13 +390,15 @@ export async function verifyPublicDrop(
         hash: '',
         hashDropId: proofPayload.hashDropId,
         contentHash: proofPayload.contentHash,
-        contentType: '',
+        contentType: proofPayload.contentType || '',
         contentSize: proofPayload.contentSize,
         signature,
         signer,
         error: 'This is a Proof Drop. The original content is not stored on-chain. Supply the original content to verify.',
         version: proofPayload.version,
         mode: proofPayload.mode,
+        mimeType: proofPayload.contentType,
+        filename: proofPayload.filename,
         needsContent: true,
         transactionVersion,
       };
@@ -599,23 +595,40 @@ export async function verifyBySignature(
 }
 
 /**
- * Verify a Proof Drop by transaction signature and original content.
+ * Verify a Proof Drop by transaction signature and original text content.
  *
- * Proof Drops do NOT store the original content on-chain. The user must supply
- * the original content. This function independently recomputes the SHA-256 hash
- * and UTF-8 byte length of the supplied content and compares them against the
- * on-chain commitment recorded in the Solana transaction memo.
- *
- * @param connection - Solana connection
- * @param signature - The Solana transaction signature
- * @param originalContent - The original content to verify against the on-chain commitment
- * @param expectedHashDropId - Optional HashDrop ID to validate against
- * @returns ProofVerificationResult with verified/not-verified status
+ * Text proofs are hashed byte-for-byte from the UTF-8 encoding of the supplied
+ * string (exact same semantics as the original string-based verifier). Media
+ * proofs should use `verifyProofDropBytes`.
  */
 export async function verifyProofDrop(
   connection: Connection,
   signature: string,
   originalContent: string,
+  expectedHashDropId?: string
+): Promise<ProofVerificationResult> {
+  return verifyProofDropBytes(connection, signature, stringToBytes(originalContent), expectedHashDropId);
+}
+
+/**
+ * Verify a Proof Drop by transaction signature and original content bytes.
+ *
+ * Proof Drops do NOT store the original content on-chain. The user must supply
+ * the original bytes (file for media proofs, UTF-8 text for text proofs). This
+ * function independently recomputes the SHA-256 hash and byte length of the
+ * supplied bytes and compares them against the on-chain commitment recorded in
+ * the Solana transaction memo.
+ *
+ * @param connection - Solana connection
+ * @param signature - The Solana transaction signature
+ * @param originalBytes - The exact original bytes to verify against the on-chain commitment
+ * @param expectedHashDropId - Optional HashDrop ID to validate against
+ * @returns ProofVerificationResult with verified/not-verified status
+ */
+export async function verifyProofDropBytes(
+  connection: Connection,
+  signature: string,
+  originalBytes: Uint8Array,
   expectedHashDropId?: string
 ): Promise<ProofVerificationResult> {
   try {
@@ -784,8 +797,8 @@ export async function verifyProofDrop(
       };
     }
 
-    // Stage 5 + 6: Calculate SHA-256 and UTF-8 byte length of supplied content
-    const contentBytes = stringToBytes(originalContent);
+    // Stage 5 + 6: Calculate SHA-256 and byte length of supplied content
+    const contentBytes = originalBytes;
     const calculatedHash = await calculateHash(contentBytes);
     const calculatedSize = contentBytes.length;
 
@@ -821,6 +834,8 @@ export async function verifyProofDrop(
         error: `PROOF NOT VERIFIED — The supplied content does not match the on-chain commitment (${errors.join(', ')}).`,
         version: proofPayload.version,
         mode: proofPayload.mode,
+        mimeType: proofPayload.contentType,
+        filename: proofPayload.filename,
         transactionVersion,
       };
     }
@@ -837,6 +852,8 @@ export async function verifyProofDrop(
       error: null,
       version: proofPayload.version,
       mode: proofPayload.mode,
+      mimeType: proofPayload.contentType,
+      filename: proofPayload.filename,
       transactionVersion,
     };
   } catch (error) {
@@ -894,6 +911,8 @@ export async function verifyPrivateDrop(
     mlKemCiphertext: Uint8Array;
     iv: Uint8Array;
     ciphertext: Uint8Array;
+    filename?: string;
+    type?: string; // object type (TEXT | IMAGE | VIDEO | AUDIO)
   },
   mlKemCiphertext: Uint8Array,
   expectedHashDropId?: string
@@ -1076,12 +1095,19 @@ export async function verifyPrivateDrop(
     }
 
     // Stage 5: Verify artifact matches transaction
-    // Compare immutable metadata between transaction and artifact
+    // Compare immutable metadata between transaction and artifact. The object
+    // type must also agree with the on-chain MIME type (both are authenticated
+    // via AAD during decryption).
+    const artifactType = typeof encryptedArtifact.type === 'string'
+      ? encryptedArtifact.type
+      : undefined;
+    const onChainType = classifyMimeType(privatePayload.contentType);
     if (encryptedArtifact.hashDropId !== privatePayload.hashDropId ||
         encryptedArtifact.contentHash !== privatePayload.contentHash ||
         encryptedArtifact.contentSize !== privatePayload.contentSize ||
         encryptedArtifact.contentType !== privatePayload.contentType ||
-        encryptedArtifact.keyFingerprint !== privatePayload.keyFingerprint) {
+        encryptedArtifact.keyFingerprint !== privatePayload.keyFingerprint ||
+        (artifactType !== undefined && onChainType !== null && artifactType !== onChainType)) {
       return {
         verified: false,
         hashDropId: privatePayload.hashDropId,
@@ -1109,6 +1135,50 @@ export async function verifyPrivateDrop(
     const encryptedKeyIv = base64ToBytes(privatePayload.encryptedKeyIv);
     const encryptedKey = base64ToBytes(privatePayload.encryptedKey);
     const encryptedKeyEnvelope = { iv: encryptedKeyIv, encryptedKey };
+
+    // Cryptographic length validation BEFORE any key-derivation or AES-GCM
+    // work. The key envelope is a fixed-size structure:
+    //   IV        = 96-bit AES-GCM nonce            → exactly 12 bytes
+    //   wrapped key = 32-byte AES-256 content key
+    //               + 16-byte GCM authentication tag → exactly 48 bytes
+    // Malformed lengths must be rejected at this validation boundary, not
+    // delegated to AES-GCM's generic failure.
+    if (encryptedKeyIv.length !== 12) {
+      return {
+        verified: false,
+        hashDropId: privatePayload.hashDropId,
+        contentHash: privatePayload.contentHash,
+        contentSize: privatePayload.contentSize,
+        calculatedHash: '',
+        calculatedSize: 0,
+        contentType: privatePayload.contentType,
+        plaintext: null,
+        signature,
+        signer,
+        error: `Invalid private key envelope: IV must be exactly 12 bytes, got ${encryptedKeyIv.length}.`,
+        version: privatePayload.version,
+        mode: privatePayload.mode,
+        transactionVersion,
+      };
+    }
+    if (encryptedKey.length !== 48) {
+      return {
+        verified: false,
+        hashDropId: privatePayload.hashDropId,
+        contentHash: privatePayload.contentHash,
+        contentSize: privatePayload.contentSize,
+        calculatedHash: '',
+        calculatedSize: 0,
+        contentType: privatePayload.contentType,
+        plaintext: null,
+        signature,
+        signer,
+        error: `Invalid private key envelope: wrapped AES key must be exactly 48 bytes (32-byte key + 16-byte GCM tag), got ${encryptedKey.length}.`,
+        version: privatePayload.version,
+        mode: privatePayload.mode,
+        transactionVersion,
+      };
+    }
     
     // The ML-KEM ciphertext is part of the encrypted artifact (off-chain)
     const mlKemCiphertext = encryptedArtifact.mlKemCiphertext;
@@ -1153,7 +1223,14 @@ export async function verifyPrivateDrop(
       calculatedHash: decryptionResult.hash,
       calculatedSize: decryptionResult.size,
       contentType: privatePayload.contentType,
-      plaintext: new TextDecoder().decode(decryptionResult.plaintext),
+      // Only text payloads undergo UTF-8 decoding; binary media is exposed as
+      // raw exact bytes (plaintextBytes) and interpreted by the rendering layer.
+      plaintext: classifyMimeType(privatePayload.contentType) === 'TEXT'
+        ? new TextDecoder().decode(decryptionResult.plaintext)
+        : null,
+      plaintextBytes: decryptionResult.plaintext,
+      filename: encryptedArtifact.filename,
+      mimeType: privatePayload.contentType,
       signature,
       signer,
       error: null,

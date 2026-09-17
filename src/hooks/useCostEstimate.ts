@@ -7,7 +7,7 @@
 
 import { useCallback, useMemo } from 'react';
 import { HASHDROP_PLATFORM_FEE_LAMPORTS } from '../lib/constants';
-import { lamportsToSol, getConnection } from '../lib/solana/networkCost';
+import { lamportsToSol } from '../lib/solana/networkCost';
 
 /**
  * Cost breakdown for a publication

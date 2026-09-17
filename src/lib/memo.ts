@@ -18,8 +18,46 @@ export const MEMO_PROGRAM_ID = 'Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH';
 export const HASHDROP_PROTOCOL_VERSION = 'v3';
 
 // Private mode cryptographic construction version
-// HD-P1 = AES-256-GCM + ML-KEM-768 + HKDF-SHA-256, version 1
-export const HASHDROP_PRIVATE_CRYPTO_VERSION = 'HD-P1';
+// HD-P2 = AES-256-GCM + ML-KEM-768 + HKDF-SHA-256, content AAD authenticates
+//         the object TYPE in addition to the on-chain commitment fields.
+export const HASHDROP_PRIVATE_CRYPTO_VERSION = 'HD-P2';
+
+// Canonical SHA-256 commitment on the wire: exactly 64 LOWERCASE hex characters.
+// HashDrop emits lowercase hex everywhere (calculateHash), so this is the one
+// canonical representation; "same value, different case" must not be a second
+// accepted wire form.
+const SHA256_HEX_64 = /^[0-9a-f]{64}$/;
+
+// Canonical key fingerprint: exactly 16 LOWERCASE hex characters (8 bytes =
+// first half of SHA-256 of the ML-KEM-768 public key).
+const FINGERPRINT_HEX_16 = /^[0-9a-f]{16}$/;
+
+/**
+ * Parse a canonical non-negative decimal byte size.
+ *
+ * Protocol rule: a byte size on the wire is exactly `0` or `[1-9][0-9]*` —
+ * no sign, no leading zeros, no whitespace, no trailing garbage, and the value
+ * must be representable as a JavaScript safe integer (Number.isSafeInteger).
+ *
+ * Canonicalization rationale: `100` and `0100` denote the same integer but are
+ * DIFFERENT protocol byte strings. parseInt() would silently normalize `0100`,
+ * `+100`, ` 100 ` and `100abc` — letting several wire forms mean one value.
+ * The canonical form is exactly what encode*Payload() emits (JS number →
+ * decimal string), so every legitimate memo/artifact passes and every
+ * non-canonical or tampered representation is rejected at parse time.
+ *
+ * @returns the parsed size, or null when the representation is not canonical
+ */
+export function parseCanonicalByteSize(value: string): number | null {
+  if (!/^(0|[1-9][0-9]*)$/.test(value)) {
+    return null;
+  }
+  const size = Number(value);
+  if (!Number.isSafeInteger(size)) {
+    return null;
+  }
+  return size;
+}
 
 // Supported protocol modes
 export type HashDropMode = 'PUBLIC' | 'PROOF' | 'PRIVATE';
@@ -67,8 +105,22 @@ export function decodePublicPayload(memo: string): PublicPayload | null {
     return null;
   }
 
-  const contentSize = parseInt(contentSizeStr, 10);
-  if (isNaN(contentSize)) {
+  // Validate SHA-256 hash format: exactly 64 canonical lowercase hex characters —
+  // the SAME rule the PROOF and PRIVATE decoders enforce (one canonical hash
+  // representation across every mode; malformed or uppercase forms are
+  // rejected at parse time, not silently reinterpreted).
+  if (!SHA256_HEX_64.test(contentHash)) {
+    return null;
+  }
+
+  // hashDropId is a required, non-empty field.
+  if (!hashDropId) {
+    return null;
+  }
+
+  // Canonical decimal size only (see parseCanonicalByteSize).
+  const contentSize = parseCanonicalByteSize(contentSizeStr);
+  if (contentSize === null) {
     return null;
   }
 
@@ -91,7 +143,11 @@ export function isValidPublicPayload(memo: string): boolean {
   return decodePublicPayload(memo) !== null;
 }
 
-// Proof Mode payload format: HASHDROP|v3|PROOF|hashDropId|sha256|contentSize
+// Unified PROOF payload format (one format for every content kind):
+//   HASHDROP|v3|PROOF|hashDropId|sha256|contentSize|contentType|filename
+// The memo commits ONLY the cryptographic proof — the hash of the exact
+// original bytes, the byte length, the validated MIME type, and the sanitized
+// filename (artifact reference; '' for text). No byte content is ever stored.
 export interface ProofPayload {
   protocol: string;
   version: string;
@@ -99,48 +155,67 @@ export interface ProofPayload {
   hashDropId: string;
   contentHash: string;
   contentSize: number;
+  contentType: string; // MIME type (e.g. text/plain, image/png, video/mp4, audio/webm)
+  filename: string; // sanitized original filename ('' when none)
 }
 
 /**
- * Encode a Proof Mode payload (V3 format)
- * Format: HASHDROP|v3|PROOF|<hashDropId>|<sha256>|<contentSize>
+ * Encode a Proof Mode payload (unified V3 format).
+ * Format: HASHDROP|v3|PROOF|<hashDropId>|<sha256>|<contentSize>|<contentType>|<filename>
  *
- * Only the cryptographic commitment is stored on-chain.
- * The original content is NEVER included.
+ * The SAME memo shape is used for TEXT (contentType text/plain, filename '')
+ * and media (PHOTO/VIDEO/VOICE). The original bytes are NEVER included — only
+ * the commitment plus the validated MIME type and the sanitized filename
+ * (which is the artifact reference: the user keeps the original file).
+ *
+ * @param contentType - validated MIME type (text/plain | image/png | video/mp4 | …)
+ * @param filename - sanitized original filename ('' for text; no '|')
  */
 export function encodeProofPayload(
   hashDropId: string,
   contentHash: string,
-  contentSize: number
+  contentSize: number,
+  contentType: string,
+  filename: string
 ): string {
-  return `HASHDROP|v3|PROOF|${hashDropId}|${contentHash}|${contentSize}`;
+  return `HASHDROP|v3|PROOF|${hashDropId}|${contentHash}|${contentSize}|${contentType}|${filename}`;
 }
 
 /**
- * Decode a Proof Mode payload (V3 format only)
+ * Decode a Proof Mode payload (unified V3 format, 8 fields).
  * Returns null if the payload is not a valid V3 PROOF payload.
  */
 export function decodeProofPayload(memo: string): ProofPayload | null {
   const parts = memo.split('|');
 
-  // V3 format: HASHDROP|v3|PROOF|hashDropId|contentHash|contentSize
-  if (parts.length !== 6) {
+  if (parts.length !== 8) {
     return null;
   }
 
-  const [protocol, version, mode, hashDropId, contentHash, contentSizeStr] = parts;
+  const [protocol, version, mode, hashDropId, contentHash, contentSizeStr, contentType, filename] = parts;
 
   if (protocol !== 'HASHDROP' || version !== 'v3' || mode !== 'PROOF') {
     return null;
   }
 
-  // Validate SHA-256 hash format (64 hex characters)
-  if (!/^[a-f0-9]{64}$/i.test(contentHash)) {
+  // Validate SHA-256 hash format: exactly 64 canonical lowercase hex characters.
+  if (!SHA256_HEX_64.test(contentHash)) {
     return null;
   }
 
-  const contentSize = parseInt(contentSizeStr, 10);
-  if (isNaN(contentSize) || contentSize < 0) {
+  // hashDropId is a required, non-empty field.
+  if (!hashDropId) {
+    return null;
+  }
+
+  // Canonical decimal size only (see parseCanonicalByteSize).
+  const contentSize = parseCanonicalByteSize(contentSizeStr);
+  if (contentSize === null) {
+    return null;
+  }
+
+  // contentType is required and must be non-empty.
+  if (!contentType || contentType.length === 0) {
     return null;
   }
 
@@ -151,6 +226,8 @@ export function decodeProofPayload(memo: string): ProofPayload | null {
     hashDropId,
     contentHash,
     contentSize,
+    contentType,
+    filename: filename ?? '',
   };
 }
 
@@ -185,7 +262,7 @@ export interface PrivatePayload {
   contentHash: string; // SHA-256 of plaintext (hex)
   contentSize: number; // Plaintext UTF-8 byte length
   contentType: string; // MIME type of plaintext
-  cryptoVersion: string; // Cryptographic construction version (e.g., "HD-P1")
+  cryptoVersion: string; // Cryptographic construction version (e.g., "HD-P2")
   keyFingerprint: string; // ML-KEM public key fingerprint (first 8 bytes of SHA-256, hex)
   encryptedKeyIv: string; // IV for encrypted AES key envelope (Base64)
   encryptedKey: string; // Encrypted AES-256 key envelope (Base64)
@@ -229,23 +306,38 @@ export function decodePrivatePayload(memo: string): PrivatePayload | null {
     return null;
   }
 
-  // Validate SHA-256 hash format (64 hex characters)
-  if (!/^[a-f0-9]{64}$/i.test(contentHash)) {
+  // hashDropId is a required, non-empty field.
+  if (!hashDropId) {
     return null;
   }
 
-  const contentSize = parseInt(contentSizeStr, 10);
-  if (isNaN(contentSize) || contentSize < 0) {
+  // Validate SHA-256 hash format: exactly 64 canonical lowercase hex characters.
+  if (!SHA256_HEX_64.test(contentHash)) {
     return null;
   }
 
-  // Validate crypto version is non-empty
-  if (!cryptoVersion || cryptoVersion.length === 0) {
+  // Canonical decimal size only (see parseCanonicalByteSize).
+  const contentSize = parseCanonicalByteSize(contentSizeStr);
+  if (contentSize === null) {
     return null;
   }
 
-  // Validate key fingerprint (16 hex chars = 8 bytes)
-  if (!/^[a-f0-9]{16}$/i.test(keyFingerprint)) {
+  // contentType is a required field (it is bound into the decryption AAD).
+  if (!contentType) {
+    return null;
+  }
+
+  // Strictly pin the crypto construction: HD-P2 is the ONLY accepted Private
+  // crypto version. Anything else — older, newer, unknown, whitespace or case
+  // variants — is rejected AT PARSE TIME so an unsupported construction can
+  // never reach decryption. No negotiation, no compatibility mapping, no
+  // trimming: the field must be byte-identical to the canonical constant.
+  if (cryptoVersion !== HASHDROP_PRIVATE_CRYPTO_VERSION) {
+    return null;
+  }
+
+  // Validate key fingerprint: exactly 16 canonical lowercase hex characters.
+  if (!FINGERPRINT_HEX_16.test(keyFingerprint)) {
     return null;
   }
 
@@ -302,7 +394,7 @@ export function decodeHashDropPayload(memo: string): PublicPayload | ProofPayloa
     return decodePublicPayload(memo);
   }
 
-  if (mode === 'PROOF' && parts.length === 6) {
+  if (mode === 'PROOF' && parts.length === 8) {
     return decodeProofPayload(memo);
   }
 

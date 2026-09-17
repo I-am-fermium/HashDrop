@@ -1,21 +1,25 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useWallet } from '../../hooks/useWallet';
 import {
   verifyBySignature,
   verifyProofDrop,
+  verifyProofDropBytes,
   verifyPrivateDrop,
   PublicVerificationResult,
   ProofVerificationResult,
   PrivateVerificationResult,
 } from '../../lib/verification';
 import { getConnection } from '../../lib/solana/networkCost';
-import { Network, getExplorerUrl, getNetworkDisplay } from '../../lib/network';
+import { getExplorerUrl, getNetworkDisplay } from '../../lib/network';
 import { importSecretKey } from '../../lib/crypto/keyManager';
 import { importArtifact } from '../../lib/crypto/encryptedArtifact';
 import { normalizeTransactionSignature } from '../../lib/signature';
+import { classifyMimeType, isMediaMime, formatFileSize } from '../../lib/media';
+import { downloadBytesFile } from '../../lib/download';
 
 type ViewerStatus = 'START' | 'FETCHING' | 'DECODING' | 'VERIFYING' | 'VERIFIED' | 'FAILED';
 
@@ -24,7 +28,6 @@ export default function Viewer() {
   const [signature, setSignature] = useState('');
   const [status, setStatus] = useState<ViewerStatus>('START');
   const [error, setError] = useState<string | null>(null);
-  const [network, setNetworkState] = useState<Network>('devnet');
   const [publicResult, setPublicResult] = useState<PublicVerificationResult | null>(null);
   const [proofResult, setProofResult] = useState<ProofVerificationResult | null>(null);
   const [proofContent, setProofContent] = useState('');
@@ -44,29 +47,29 @@ export default function Viewer() {
   } | null>(null);
   const [privateArtifactEnvelope, setPrivateArtifactEnvelope] = useState('');
   const [privateSecretKey, setPrivateSecretKey] = useState('');
+  // PROOF-mode media verification: the user supplies the exact original file.
+  const [proofMediaFile, setProofMediaFile] = useState<{
+    bytes: Uint8Array;
+    name: string;
+    mimeType: string;
+  } | null>(null);
+  const [proofMediaObjectUrl, setProofMediaObjectUrl] = useState<string | null>(null);
 
-  const { publicKey, isConnected, connection } = useWallet();
+  const { connection } = useWallet();
 
-  useEffect(() => {
-    const updateNetwork = () => {
-      const { getCurrentNetwork } = require('../../lib/network');
-      setNetworkState(getCurrentNetwork());
-    };
-    updateNetwork();
-    const handleStorageChange = () => updateNetwork();
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
-
-  const resetResults = () => {
+  const resetResults = useCallback(() => {
     setPublicResult(null);
     setProofResult(null);
     setPrivateResult(null);
     setPrivateCommitment(null);
     setIsProofDrop(false);
     setIsPrivateDrop(false);
+    setProofContent('');
+    setProofMediaFile(null);
+    if (proofMediaObjectUrl) URL.revokeObjectURL(proofMediaObjectUrl);
+    setProofMediaObjectUrl(null);
     setError(null);
-  };
+  }, [proofMediaObjectUrl]);
 
   const handleVerify = useCallback(async () => {
     resetResults();
@@ -117,13 +120,41 @@ export default function Viewer() {
       setStatus('FAILED');
       setError(err instanceof Error ? err.message : 'Unknown error');
     }
-  }, [signature, hashDropId, connection]);
+  }, [signature, hashDropId, connection, resetResults]);
+
+  const handleProofMediaFileChosen = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const buffer = event.target?.result as ArrayBuffer;
+      if (!buffer) return;
+      const bytes = new Uint8Array(buffer);
+      setProofMediaFile({ bytes, name: file.name, mimeType: file.type || '' });
+      if (proofMediaObjectUrl) URL.revokeObjectURL(proofMediaObjectUrl);
+      setProofMediaObjectUrl(URL.createObjectURL(file));
+      setError(null);
+    };
+    reader.readAsArrayBuffer(file);
+  }, [proofMediaObjectUrl]);
 
   const handleProofVerify = useCallback(async () => {
-    if (!proofContent) {
+    // The unified PROOF memo always carries a MIME type; media MIMEs require
+    // the user to supply the exact original file, while text MIMEs use the
+    // string-input flow.
+    const isMedia = publicResult?.mimeType ? isMediaMime(publicResult.mimeType) : false;
+
+    if (isMedia) {
+      if (!proofMediaFile) {
+        setError('Please select the original file to verify against the proof');
+        return;
+      }
+    } else if (!proofContent) {
       setError('Please enter the original content to verify');
       return;
     }
+
     const normalizedSignature = normalizeTransactionSignature(signature);
     if (!normalizedSignature) {
       setError('Invalid transaction signature format');
@@ -134,7 +165,12 @@ export default function Viewer() {
     setError(null);
     try {
       const conn = connection || getConnection();
-      const result = await verifyProofDrop(conn, normalizedSignature, proofContent, hashDropId || undefined);
+      // Verification is always SHA-256(exact original bytes) compared against
+      // the on-chain commitment — text is hashed byte-for-byte from its UTF-8
+      // encoding, media byte-for-byte from the supplied file.
+      const result = isMedia && proofMediaFile
+        ? await verifyProofDropBytes(conn, normalizedSignature, proofMediaFile.bytes, hashDropId || undefined)
+        : await verifyProofDrop(conn, normalizedSignature, proofContent, hashDropId || undefined);
       setProofResult(result);
       setStatus(result.verified ? 'VERIFIED' : 'FAILED');
       if (!result.verified && !error) {
@@ -144,7 +180,7 @@ export default function Viewer() {
       setStatus('FAILED');
       setError(err instanceof Error ? err.message : 'Unknown error');
     }
-  }, [signature, hashDropId, connection, proofContent, error]);
+  }, [signature, hashDropId, connection, proofContent, proofMediaFile, publicResult, error]);
 
   const handlePrivateVerify = useCallback(async () => {
     if (!privateArtifactEnvelope || !privateSecretKey) {
@@ -342,18 +378,68 @@ export default function Viewer() {
                 </div>
               </div>
             )}
-            <div className="mb-3">
-              <label className="block text-sm text-secondary mb-1">Original Content</label>
-              <textarea
-                className="w-full h-32 bg-black text-primary font-mono p-2 rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-accent text-sm"
-                placeholder="Enter the original content to verify against the proof..."
-                value={proofContent}
-                onChange={(e) => setProofContent(e.target.value)}
-              />
-            </div>
+            {publicResult && publicResult.mimeType && isMediaMime(publicResult.mimeType) ? (
+              <>
+                <div className="bg-blue-900/30 border border-blue-600 rounded p-3 mb-4">
+                  <p className="text-sm text-blue-300">
+                    <strong>Media Proof:</strong> this HashDrop commits to a{' '}
+                    {publicResult.mimeType} file{publicResult.filename ? ` (${publicResult.filename})` : ''}.
+                    Select the exact original file to verify its SHA-256 against the on-chain commitment.
+                  </p>
+                </div>
+                <div className="mb-3">
+                  {proofMediaFile ? (
+                    <div className="bg-black border border-gray-700 rounded p-3">
+                      <div className="text-sm text-primary mb-1">Selected file:</div>
+                      <div className="text-xs text-accent break-all">{proofMediaFile.name}</div>
+                      <div className="text-xs text-secondary mt-1">
+                        {formatFileSize(proofMediaFile.bytes.length)} · {proofMediaFile.mimeType || publicResult.mimeType}
+                      </div>
+                      <label className="mt-2 inline-block cursor-pointer bg-gray-700 text-primary px-3 py-1.5 rounded text-sm hover:opacity-90 transition">
+                        Choose different file
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept={publicResult.mimeType}
+                          onChange={handleProofMediaFileChosen}
+                        />
+                      </label>
+                    </div>
+                  ) : (
+                    <label className="cursor-pointer block bg-black border border-dashed border-gray-600 rounded p-6 text-center hover:border-accent transition">
+                      <div className="text-accent font-medium">Select the original file</div>
+                      <div className="text-xs text-secondary mt-1">
+                        The exact original file that was committed ({publicResult.mimeType})
+                      </div>
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept={publicResult.mimeType}
+                        onChange={handleProofMediaFileChosen}
+                      />
+                    </label>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mb-3">
+                  <label className="block text-sm text-secondary mb-1">Original Content</label>
+                  <textarea
+                    className="w-full h-32 bg-black text-primary font-mono p-2 rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-accent text-sm"
+                    placeholder="Enter the original content to verify against the proof..."
+                    value={proofContent}
+                    onChange={(e) => setProofContent(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
             <button
               onClick={handleProofVerify}
-              disabled={status === 'VERIFYING' || !proofContent}
+              disabled={
+                status === 'VERIFYING' ||
+                (publicResult?.mimeType && isMediaMime(publicResult.mimeType) ? !proofMediaFile : !proofContent)
+              }
               className="w-full bg-accent text-white font-bold py-2 px-4 rounded hover:opacity-90 transition disabled:opacity-50"
             >
               {status === 'VERIFYING' ? 'Verifying...' : 'VERIFY PROOF'}
@@ -368,6 +454,60 @@ export default function Viewer() {
               {proofResult.verified ? '✓ VERIFIED' : '✕ NOT VERIFIED'}
             </h2>
             <div className="space-y-3">
+              {/* Media viewer for verified/inspected PROOF media */}
+              {proofResult.verified && proofResult.mimeType && proofMediaObjectUrl && isMediaMime(proofResult.mimeType) && (
+                <div className="bg-black border border-gray-700 rounded p-3">
+                  {classifyMimeType(proofResult.mimeType) === 'IMAGE' && (
+                    <div className="relative h-80 w-full overflow-hidden">
+                      <Image
+                        src={proofMediaObjectUrl}
+                        alt="Verified media"
+                        fill
+                        unoptimized
+                        className="object-contain rounded"
+                      />
+                    </div>
+                  )}
+                  {classifyMimeType(proofResult.mimeType) === 'VIDEO' && (
+                    <video src={proofMediaObjectUrl} controls className="max-h-80 w-full rounded" />
+                  )}
+                  {classifyMimeType(proofResult.mimeType) === 'AUDIO' && (
+                    <audio src={proofMediaObjectUrl} controls className="w-full" />
+                  )}
+                  <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                    <dt className="text-secondary">Filename</dt>
+                    <dd className="text-accent break-all">{proofMediaFile?.name || proofResult.filename || 'original'}</dd>
+                    <dt className="text-secondary">MIME Type</dt>
+                    <dd className="text-accent break-all">{proofResult.mimeType}</dd>
+                    <dt className="text-secondary">Size</dt>
+                    <dd className="text-accent">{formatFileSize(proofResult.calculatedSize)}</dd>
+                    <dt className="text-secondary">Verification</dt>
+                    <dd className="text-green-400 font-bold">VERIFIED — hash matches on-chain commitment</dd>
+                  </dl>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (proofMediaFile) {
+                        downloadBytesFile(proofMediaFile.name, proofMediaFile.bytes, proofMediaFile.mimeType || proofResult.mimeType || 'application/octet-stream');
+                      } else if (proofMediaObjectUrl) {
+                        const a = document.createElement('a');
+                        a.href = proofMediaObjectUrl;
+                        a.download = proofResult.filename || 'original';
+                        a.click();
+                      }
+                    }}
+                    className="mt-3 px-3 py-1.5 bg-accent text-white font-bold rounded hover:opacity-90 transition text-sm"
+                  >
+                    Download Original
+                  </button>
+                </div>
+              )}
+              {proofResult.verified && proofResult.mimeType && isMediaMime(proofResult.mimeType) && !proofMediaObjectUrl && (
+                <div className="text-yellow-300 text-sm bg-yellow-900/30 border border-yellow-600 rounded p-3">
+                  The on-chain commitment verified, but the original file is no longer loaded in this session.
+                  Re-select the file above to render it.
+                </div>
+              )}
               <div>
                 <div className="text-xs text-secondary mb-1">HashDrop ID</div>
                 <div className="font-mono text-xs text-accent break-all">{proofResult.hashDropId}</div>
@@ -515,6 +655,67 @@ export default function Viewer() {
             <h2 className="text-lg font-semibold mb-3 text-primary">🔐 Private Drop — Decrypted</h2>
             <div className="space-y-3">
               <div className="text-green-400 font-bold">✓ DECRYPTED & VERIFIED</div>
+              {/* Media viewer for decrypted PRIVATE media */}
+              {privateResult.plaintextBytes && privateResult.mimeType && isMediaMime(privateResult.mimeType) && (
+                <div className="bg-black border border-gray-700 rounded p-3">
+                  {classifyMimeType(privateResult.mimeType) === 'IMAGE' && (
+                    <div className="relative h-80 w-full overflow-hidden">
+                      <Image
+                        src={URL.createObjectURL(new Blob([privateResult.plaintextBytes as BlobPart], { type: privateResult.mimeType }))}
+                        alt="Decrypted media"
+                        fill
+                        unoptimized
+                        className="object-contain rounded"
+                      />
+                    </div>
+                  )}
+                  {classifyMimeType(privateResult.mimeType) === 'VIDEO' && (
+                    <video
+                      src={URL.createObjectURL(new Blob([privateResult.plaintextBytes as BlobPart], { type: privateResult.mimeType }))}
+                      controls
+                      className="max-h-80 w-full rounded"
+                    />
+                  )}
+                  {classifyMimeType(privateResult.mimeType) === 'AUDIO' && (
+                    <audio
+                      src={URL.createObjectURL(new Blob([privateResult.plaintextBytes as BlobPart], { type: privateResult.mimeType }))}
+                      controls
+                      className="w-full"
+                    />
+                  )}
+                  <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                    <dt className="text-secondary">Filename</dt>
+                    <dd className="text-accent break-all">{privateResult.filename || 'decrypted-original'}</dd>
+                    <dt className="text-secondary">MIME Type</dt>
+                    <dd className="text-accent break-all">{privateResult.mimeType}</dd>
+                    <dt className="text-secondary">Size</dt>
+                    <dd className="text-accent">{formatFileSize(privateResult.calculatedSize)}</dd>
+                    <dt className="text-secondary">Verification</dt>
+                    <dd className="text-green-400 font-bold">AES-GCM authenticated · SHA-256 matches on-chain commitment</dd>
+                  </dl>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (privateResult.plaintextBytes) {
+                        downloadBytesFile(
+                          privateResult.filename || 'decrypted-original',
+                          privateResult.plaintextBytes,
+                          privateResult.mimeType || 'application/octet-stream'
+                        );
+                      }
+                    }}
+                    className="mt-3 px-3 py-1.5 bg-accent text-white font-bold rounded hover:opacity-90 transition text-sm"
+                  >
+                    Download Original
+                  </button>
+                </div>
+              )}
+              {privateResult.mimeType && isMediaMime(privateResult.mimeType) && !privateResult.plaintextBytes && (
+                <div className="text-red-400 text-sm bg-red-900/30 border border-red-600 rounded p-3">
+                  Decryption failed or the recovered bytes could not be obtained. The content will not be
+                  displayed as valid unless AES-GCM authentication and SHA-256 verification succeed.
+                </div>
+              )}
               <div>
                 <div className="text-xs text-secondary mb-1">HashDrop ID</div>
                 <div className="font-mono text-xs text-accent break-all">{privateResult.hashDropId}</div>
@@ -533,7 +734,7 @@ export default function Viewer() {
                 <div className="text-xs text-secondary mb-1">Calculated SHA-256</div>
                 <div className="font-mono text-xs text-accent break-all">{privateResult.calculatedHash}</div>
               </div>
-              {privateResult.plaintext && (
+              {privateResult.plaintext && !(privateResult.mimeType && isMediaMime(privateResult.mimeType)) && (
                 <div>
                   <div className="text-xs text-secondary mb-1">Decrypted Content</div>
                   <div className="bg-black p-3 rounded font-mono text-sm text-accent whitespace-pre-wrap break-words">

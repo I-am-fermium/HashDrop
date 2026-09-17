@@ -27,10 +27,15 @@ HashDrop uses the SPL Memo program for all publications:
 
 HashDrop Protocol v3 is the current and only supported protocol version.
 
-Supported modes:
-- **PUBLIC** - Content is published on-chain
-- **PROOF** - Only the cryptographic proof is published; original content remains private
-- **PRIVATE** - Content is encrypted locally before publication; only the key holder can decrypt
+Supported modes and content:
+
+- **PUBLIC** - Content is published on-chain. **TEXT ONLY** (unchanged).
+- **PROOF** - Only the cryptographic proof is published; original content remains private. Supports **TEXT + PHOTO + VIDEO + VOICE**.
+- **PRIVATE** - Content is encrypted locally before publication; only the key holder can decrypt. Supports **TEXT + PHOTO + VIDEO + VOICE**.
+
+Large media is NEVER stored in a Solana memo. Memos carry compact metadata /
+cryptographic commitments; media artifacts stay off-chain (user-held original
+for PROOF, encrypted `.hdp` artifact for PRIVATE).
 
 ## Metadata account
 
@@ -111,21 +116,27 @@ Where:
 
 ## V3 PROOF Format
 
-The Proof mode payload format is:
+### Unified (one format for every content kind)
 
-```
-HASHDROP|v3|PROOF|<hashDropId>|<sha256>|<contentSize>
+```text
+HASHDROP|v3|PROOF|<hashDropId>|<sha256>|<contentSize>|<contentType>|<filename>
 ```
 
 Where:
 - `v3` - Protocol version
 - `PROOF` - Mode identifier (only cryptographic commitment published)
 - `<hashDropId>` - Deterministic identifier
-- `<sha256>` - SHA-256 hash of exact UTF-8 content bytes
-- `<contentSize>` - Exact UTF-8 byte length
+- `<sha256>` - SHA-256 hash of the EXACT original bytes (hex)
+- `<contentSize>` - Exact byte length of the original artifact
+- `<contentType>` - Validated MIME type (e.g. `text/plain`, `image/png`, `video/mp4`, `audio/webm`)
+- `<filename>` - Sanitized original filename (`''` for text)
 
-Note: Proof mode does NOT store the original content, mimeType, or any timestamp/slot/blockTime.
-The original content never leaves the browser.
+Proof mode NEVER stores the original bytes on-chain — only the commitment plus
+the content type and filename (the artifact reference). The user keeps the
+exact original file (`''` filename for text) and supplies it during
+verification. Verification recomputes `SHA-256(retrieved bytes)` and compares
+it with the on-chain commitment. TEXT, IMAGE, VIDEO and AUDIO all use this one
+memo shape; there is no separate text/media proof serialization.
 
 ## V3 PRIVATE Format
 
@@ -142,13 +153,35 @@ Where:
 - `<sha256>` - SHA-256 hash of original plaintext (hex)
 - `<contentSize>` - Original UTF-8 byte length
 - `<mimeType>` - MIME type of original content
-- `<cryptoVersion>` - Cryptographic construction version (e.g., `HD-P1`)
+- `<cryptoVersion>` - Cryptographic construction version (`HD-P2`)
 - `<keyFingerprint>` - ML-KEM-768 public key fingerprint (first 16 hex chars of SHA-256)
 - `<encryptedKeyIv>` - IV for encrypted AES key envelope (Base64, 16 chars)
 - `<encryptedKey>` - Encrypted AES-256 key envelope (Base64, 64 chars for 48 bytes)
 
 Note: Private mode does NOT store the original content, AES ciphertext, AES key, or ML-KEM secret key on-chain.
 The encrypted content artifact is user-controlled/off-chain.
+
+### Unified encrypted artifact
+
+The off-chain encrypted-artifact envelope is ONE canonical protocol for all
+content kinds. **Artifact version and object type are separate concepts:**
+
+- `version` = the artifact schema version (exactly one: `v1`).
+- `type` = what the encrypted payload represents (`TEXT | IMAGE | VIDEO |
+  AUDIO`), validated for consistency with the MIME type.
+
+```text
+HASHDROP-PRIVATE-BLOB|v1|<hashDropId>|<sha256>|<contentSize>|<type>|<mimeType>|<cryptoVersion>|<keyFingerprint>|<mlkemCt>|<iv>|<ciphertext>|<filename>
+```
+
+- The same 11-field PRIVATE memo and the same envelope are used for TEXT,
+  IMAGE, VIDEO and AUDIO.
+- The filename is always present (`''` for text) and is auxiliary display
+  metadata only (download naming / UI display). It is NOT part of the AAD
+  binding, and it is sanitized (no `|`, path separators, or `..` traversal).
+- The object `type` IS authenticated through AAD, so a tampered type/MIME
+  combination fails AES-GCM authentication during decryption.
+- One envelope, one importer — there is no v1/v2 artifact split.
 
 ## Private Mode Cryptography
 
@@ -202,14 +235,18 @@ random AES-256 content key (32 bytes, CSPRNG)
 
 ### AAD Construction
 
+AAD authenticates the on-chain commitment fields **plus the object type**.
+The object type is a deterministic function of the MIME type (so it is always
+reconstructible during decryption without being stored on-chain).
+
 **Key-envelope AAD:**
 ```
-HASHDROP-PRIVATE-KEY|v1|<hashDropId>|<sha256>|<contentSize>|<mimeType>|<cryptoVersion>|<keyFingerprint>
+HASHDROP-PRIVATE-KEY|v1|<hashDropId>|<sha256>|<contentSize>|<type>|<mimeType>|<cryptoVersion>|<keyFingerprint>
 ```
 
 **Content-artifact AAD:**
 ```
-HASHDROP-PRIVATE-BLOB|v1|<hashDropId>|<sha256>|<contentSize>|<mimeType>|<cryptoVersion>|<keyFingerprint>
+HASHDROP-PRIVATE-BLOB|v1|<hashDropId>|<sha256>|<contentSize>|<type>|<mimeType>|<cryptoVersion>|<keyFingerprint>
 ```
 
 ### HKDF Construction
@@ -264,7 +301,7 @@ Remaining headroom: **740 bytes**
 ### Encrypted Artifact Format
 
 ```
-HASHDROP-PRIVATE-BLOB|v1|<hashDropId>|<sha256>|<contentSize>|<mimeType>|<cryptoVersion>|<keyFingerprint>|<base64-mlkem-ct>|<base64-iv>|<base64-ciphertext>
+HASHDROP-PRIVATE-BLOB|v1|<hashDropId>|<sha256>|<contentSize>|<type>|<mimeType>|<cryptoVersion>|<keyFingerprint>|<base64-mlkem-ct>|<base64-iv>|<base64-ciphertext>|<filename>
 ```
 
 The artifact is exported client-side by the publish flow via `exportArtifact()`
@@ -273,7 +310,9 @@ and downloaded as **`hashdrop-private-<hashDropId>.hdp`**
 envelope string above (UTF-8 text) — the extension is only a container
 convention. The Viewer imports the file (read locally as text) or accepts the
 pasted string; both feed the same `importArtifact()` parser. Nothing is ever
-uploaded.
+uploaded. The `<type>` field holds the object type (`TEXT | IMAGE | VIDEO |
+AUDIO`) — the artifact **version** (`v1`) and the object **type** are separate
+concepts.
 
 ### Key Export/Import Format
 

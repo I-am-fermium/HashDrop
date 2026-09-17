@@ -23,21 +23,14 @@
  * Never store in URLs, logs, or on-chain.
  */
 
-import { generateKeypair, MlKemKeypair, ML_KEM_768_PUBLIC_KEY_BYTES, ML_KEM_768_SECRET_KEY_BYTES } from './mlKem';
-import { utf8ToBytes, bytesToBase64, base64ToBytes } from '../encoding';
+import { ML_KEM_768_PUBLIC_KEY_BYTES, ML_KEM_768_SECRET_KEY_BYTES } from './mlKem';
+import { bytesToBase64, base64ToBytes } from '../encoding';
 import { calculateHash } from '../content';
 
 // Key envelope constants
 const KEY_ENVELOPE_PREFIX = 'HASHDROP-KEY';
 const KEY_ENVELOPE_VERSION = 'v1';
 const KEY_ALGORITHM = 'ML-KEM-768';
-
-/**
- * Generate a new ML-KEM-768 keypair
- */
-export async function generateKey(): Promise<MlKemKeypair> {
-  return generateKeypair();
-}
 
 /**
  * Export secret key as a versioned envelope string

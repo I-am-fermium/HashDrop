@@ -45,7 +45,48 @@ export function utf8ToBase64(text: string): string {
  * base64ToUtf8('SGVsbG8g8J+Mj8=') // Returns 'Hello 🌍'
  * base64ToUtf8('0JfQsNC00L7QstC+0L3RgNCw0Y8=') // Returns Bengali text
  */
+// ---------------------------------------------------------------------------
+// Strict canonical Base64 (RFC 4648 §4, standard alphabet — NOT base64url).
+//
+// HashDrop emits ONLY btoa() output: the standard alphabet with zero-filled
+// padding. Previously the decoders delegated validity entirely to atob(),
+// which is "forgiving" (it strips ASCII whitespace and accepts missing
+// padding), while the Node test polyfill (Buffer.from(str, 'base64')) is even
+// more lenient (it ignores arbitrary invalid characters). That made malformed
+// input decode differently — or not at all — depending on the runtime.
+//
+// Canonical validation keeps ONE wire representation per byte sequence:
+//   - standard alphabet only (no '-', '_', no whitespace, no invalid chars)
+//   - length must be a multiple of 4
+//   - padding only at the very end (0–2 '=' characters)
+//   - discarded trailing bits must be zero (rejects 'QT==' for 'QQ==')
+// Empty string is canonical for zero bytes; protocol fields that require
+// non-empty content enforce that themselves before decoding.
+// ---------------------------------------------------------------------------
+const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+function assertCanonicalBase64(base64: string): void {
+  // Standard alphabet only; '=' padding only at the very end (0–2 chars).
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(base64) || base64.length % 4 !== 0) {
+    throw new Error('Invalid Base64 encoding');
+  }
+  const padding = base64.length - base64.replace(/=+$/, '').length;
+  if (padding > 0) {
+    // Canonical padding: the discarded trailing bits of the last data
+    // character must be zero, so two different strings can never decode to
+    // the same bytes ('QT==' would otherwise equal 'QQ==').
+    const value = BASE64_ALPHABET.indexOf(base64[base64.length - padding - 1]);
+    const unusedBits = padding === 1 ? 2 : 4;
+    if (value < 0 || (value & ((1 << unusedBits) - 1)) !== 0) {
+      throw new Error('Invalid Base64 encoding: non-canonical padding');
+    }
+  }
+}
+
 export function base64ToUtf8(base64: string): string {
+  // Strict canonical validation first — never rely on atob()/Buffer leniency.
+  assertCanonicalBase64(base64);
+
   // Decode Base64 to binary string
   const binary = atob(base64);
   
@@ -102,6 +143,8 @@ export function bytesToBase64(bytes: Uint8Array): string {
  * @returns Raw bytes
  */
 export function base64ToBytes(base64: string): Uint8Array {
+  // Strict canonical validation first — never rely on atob()/Buffer leniency.
+  assertCanonicalBase64(base64);
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {

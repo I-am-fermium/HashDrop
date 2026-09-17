@@ -185,11 +185,13 @@ describe('Private Drop Hybrid Encryption', () => {
         hashDropId: 'hd_test',
         contentHash: 'a'.repeat(64),
         contentSize: 100,
+        type: 'TEXT' as const,
         contentType: 'text/plain',
         keyFingerprint: 'aabbccdd11223344',
         mlKemCiphertext: new Uint8Array(1088).fill(0),
         iv: new Uint8Array(12).fill(1),
         ciphertext: new Uint8Array(32).fill(2),
+        filename: '',
       };
       const exported = exportArtifact(artifact);
       const imported = importArtifact(exported);
@@ -382,21 +384,3 @@ describe('Private Drop Hybrid Encryption', () => {
     });
   });
 });
-
-// Helper function for tests
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
-
-function base64ToBytes(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}

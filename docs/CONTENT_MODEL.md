@@ -1,10 +1,16 @@
 # Content Model
 
-## V1 supported content
+## Supported content
 
-HashDrop V1 supports small text and source-code content.
+HashDrop supports TEXT, PHOTO, VIDEO and VOICE content, scoped by mode:
 
-A content record should have an explicit media/content type and optional programming-language metadata.
+```text
+PUBLIC  -> TEXT ONLY (existing implementation unchanged)
+PROOF   -> TEXT + IMAGE + VIDEO + AUDIO
+PRIVATE -> TEXT + IMAGE + VIDEO + AUDIO
+```
+
+A content record has an explicit media/content type.
 
 ## Byte-first rule
 
@@ -12,7 +18,13 @@ Hashes and sizes operate on the exact bytes that will be stored on-chain, not on
 
 The browser must establish a deterministic encoding before hashing and publishing.
 
+For media, the proof hash is `SHA-256(exact original file bytes)`. Previews,
+transcoded copies, compressed representations and Base64/JSON wrappers are
+never hashed.
+
 ## Supported Content Types
+
+### Text (all modes)
 
 | MIME Type | Description |
 |-----------|-------------|
@@ -24,13 +36,35 @@ The browser must establish a deterministic encoding before hashing and publishin
 | application/json | JSON |
 | text/markdown | Markdown |
 
+### Media (PROOF / PRIVATE only)
+
+| MIME Type | Kind |
+|-----------|------|
+| image/jpeg | IMAGE |
+| image/png | IMAGE |
+| image/webp | IMAGE |
+| image/gif | IMAGE |
+| video/mp4 | VIDEO |
+| video/webm | VIDEO |
+| video/quicktime | VIDEO |
+| audio/webm | AUDIO |
+| audio/ogg | AUDIO |
+| audio/wav | AUDIO |
+| audio/mpeg | AUDIO |
+| audio/mp4 | AUDIO |
+
+Media MIME types are validated against the file signature / magic bytes. The
+declared MIME and filename extension are never trusted alone; files whose
+signature disagrees with the declared kind are rejected.
+
 ## Validation
 
 Reject:
 
 - unsupported content types;
 - empty content if the protocol disallows it;
-- assets exceeding the V1 limit;
+- files exceeding `MAX_MEDIA_FILE_BYTES` (100 MB);
+- files whose magic-byte signature does not match the declared MIME kind;
 - malformed data that cannot be represented by the protocol.
 
 The precise policy must be implemented consistently between client and program.
@@ -46,6 +80,10 @@ The precise policy must be implemented consistently between client and program.
 - **Max Transaction Size**: 4096 bytes
 - **Effective Content**: ~2800 bytes (after base64 encoding)
 - **Status**: Ready when Phantom adds v1 signing support
+
+Media is NEVER placed inside a memo. Only the compact commitment/metadata is
+published on-chain; the media artifact is off-chain (user-held file for PROOF,
+encrypted `.hdp` artifact for PRIVATE).
 
 ## Encoding
 

@@ -22,10 +22,7 @@ import {
   detectTransactionCapabilities as _detectTransactionCapabilities,
   LEGACY_TRANSACTION_MAX_BYTES,
 } from './solana/transactionCapabilities';
-import { getRpcUrl, getCurrentNetwork, Network, createRpc } from './network';
-
-// Re-export for use by other modules
-export { _detectTransactionCapabilities as detectTransactionCapabilities };
+import { getCurrentNetwork, createRpc } from './network';
 
 /**
  * Build a Public Mode transaction
@@ -107,16 +104,25 @@ export async function buildPublicTransaction(
  * (HashDrop Protocol V3) plus the platform-fee transfer instruction.
  * Compiled to a Solana V0 message (VersionedTransaction) — 1232-byte packet ceiling.
  *
- * The original content is NEVER stored on-chain. Only the SHA-256 commitment
- * and the original byte length are published. The transaction includes the
- * platform-fee transfer instruction, atomically bundled with the proof memo.
+ * The original content is NEVER stored on-chain. Only the SHA-256 commitment,
+ * byte length, validated MIME type, and sanitized filename are published. The
+ * transaction includes the platform-fee transfer instruction, atomically
+ * bundled with the proof memo.
+ *
+ * The same unified PROOF memo is used for TEXT (contentType text/plain,
+ * filename '') and media (PHOTO/VIDEO/VOICE).
+ *
+ * @param contentType - Validated MIME type (media proofs; text/plain otherwise)
+ * @param filename - Sanitized original filename (media proofs; '' otherwise)
  */
 export async function buildProofDropTransaction(
   hashDropId: string,
   contentHash: string,
   contentSize: number,
   address: string,
-  connection?: Connection
+  connection?: Connection,
+  contentType?: string,
+  filename?: string
 ): Promise<VersionedTransaction> {
   // Detect transaction capabilities
   const capabilities = await _detectTransactionCapabilities(connection);
@@ -153,11 +159,15 @@ export async function buildProofDropTransaction(
     throw error;
   }
 
-  // Encode proof payload — ONLY the cryptographic commitment, never the content itself
+  // Encode proof payload — ONLY the cryptographic commitment, never the content
+  // itself. The unified PROOF memo always carries the validated MIME type and
+  // sanitized filename (text proofs use text/plain + '').
   const memoPayload = encodeProofPayload(
     hashDropId,
     contentHash,
-    contentSize
+    contentSize,
+    contentType || 'text/plain',
+    filename || ''
   );
 
   // Assemble the transaction via the shared boundary (currently compiles to Solana v0)
