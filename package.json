@@ -13,31 +13,31 @@
     "test:coverage": "jest --coverage"
   },
   "dependencies": {
-    "@solana/addresses": "7.1.1",
-    "@solana/kit": "^7.1.1",
-    "@solana/rpc": "7.1.1",
-    "@solana/rpc-api": "7.1.1",
-    "@solana/rpc-spec": "7.1.1",
-    "@solana/web3.js": "^1.98.4",
+    "@solana/addresses": "8.3.0",
+    "@solana/kit": "^8.3.0",
+    "@solana/rpc": "8.3.0",
+    "@solana/rpc-api": "8.3.0",
+    "@solana/rpc-spec": "8.3.0",
+    "@solana/web3.js": "^1.99.0",
     "bs58": "6.0.0",
     "mlkem": "^2.7.0",
-    "next": "16.3.1",
-    "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "next": "16.3.5",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.2.0",
-    "@types/react": "^19.2.4",
-    "@types/react-dom": "^19.2.4",
-    "autoprefixer": "^10.4.20",
+    "@types/node": "^26.6.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "autoprefixer": "^10.6.1",
     "eslint": "9.39.5",
-    "eslint-config-next": "16.3.1",
-    "globals": "16.4.0",
-    "jest": "^30.4.1",
-    "jest-environment-jsdom": "^30.4.1",
-    "postcss": "^8.4.31",
-    "typescript": "6.0.2"
+    "eslint-config-next": "16.3.5",
+    "globals": "17.12.0",
+    "jest": "^30.5.2",
+    "jest-environment-jsdom": "^30.5.2",
+    "postcss": "^8.5.28",
+    "typescript": "^6.0.3"
   }
 }
