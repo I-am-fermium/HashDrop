@@ -161,11 +161,10 @@ export default function Home() {
   }, []);
 
   /**
-   * Handle a chosen media file (photo/video picked in the file dialog, or a
-   * synthesized voice-recording File). Reads the exact original bytes once,
-   * validates MIME against the magic-byte signature, and computes the SHA-256
-   * hash. The authoritative original bytes are retained for encryption and
-   * for the proof.
+   * Handle a chosen media file (photo/video/audio picked in the file dialog).
+   * Reads the exact original bytes once, validates MIME against the magic-byte
+   * signature, and computes the SHA-256 hash. The authoritative original bytes
+   * are retained for encryption and for the proof.
    */
   const handleFileChosen = useCallback(
     async (file: File, _declaredKind: 'IMAGE' | 'VIDEO' | 'AUDIO') => {

@@ -20,7 +20,7 @@ for the full media architecture.
 - **Cryptographic verification**: Verify content hash matches published data
 - **Memo Drop**: For small content, uses SPL Memo program, no storage account needed
 - **Media support (Proof/Private)**: Photo (JPEG/PNG/WebP/GIF), Video (MP4/WebM/QuickTime), Voice/audio (WebM/OGG/WAV/MP3/MP4) — hashed from the exact original bytes, kept off-chain
-- **Voice recording**: Browser MediaRecorder for Proof/Private voice notes
+- **Voice/audio upload (Proof/Private)**: select an existing audio file (WebM/OGG/WAV/MP3/MP4) — no recording; the original file is hashed from its exact bytes
 - **Real platform fee**: 0.001 SOL is transferred on-chain to the HashDrop fee wallet via a `SystemProgram.transfer` instruction inside the publish transaction
 - **Production favicon**: App Router `src/app/icon.svg` (red "H" brand mark)
 
