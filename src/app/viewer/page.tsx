@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useWallet } from '../../hooks/useWallet';
@@ -89,16 +89,26 @@ export default function Viewer() {
     setError(null);
   }, [proofMediaObjectUrl]);
 
-  const handleVerify = useCallback(async () => {
+  /**
+   * The single Retrieve entry point — invoked by the Retrieve button AND by
+   * the shared-URL effect below, so there is exactly one retrieval/verification
+   * path. `explicitSignature` lets /viewer?signature=<signature> pass the URL
+   * value directly (never reading a stale `signature` state value); it is
+   * mirrored into the signature input state so the field always shows exactly
+   * what was retrieved.
+   */
+  const handleVerify = useCallback(async (explicitSignature?: string) => {
+    if (explicitSignature !== undefined) setSignature(explicitSignature);
+    const rawSignature = explicitSignature ?? signature;
     resetResults();
-    if (!signature.trim()) {
+    if (!rawSignature.trim()) {
       setError('Please enter a transaction signature');
       return;
     }
     // Canonical validation: trim -> Base58 decode -> exactly 64 bytes.
     // Network-independent (a 64-byte signature is 87 OR 88 Base58 chars, so a
     // hard-coded textual length would wrongly reject real Mainnet signatures).
-    const normalizedSignature = normalizeTransactionSignature(signature);
+    const normalizedSignature = normalizeTransactionSignature(rawSignature);
     if (!normalizedSignature) {
       setError('Invalid transaction signature format');
       return;
@@ -139,6 +149,26 @@ export default function Viewer() {
       setError(err instanceof Error ? err.message : 'Unknown error');
     }
   }, [signature, hashDropId, connection, resetResults]);
+
+  /**
+   * Shared-URL entry point: /viewer?signature=<signature> (the verification
+   * link a certificate's QR/code opens). Feed that value into the SAME
+   * handleVerify() the Retrieve button uses — no separate retrieval path.
+   * The ref guard records the exact URL signature already processed so
+   * re-renders, StrictMode's double effect invocation, and handleVerify's
+   * identity changes can never start a second automatic retrieval, while a
+   * page reload (fresh mount) still auto-retrieves. A missing or empty
+   * `signature` parameter is ignored — plain /viewer stays manual-only.
+   */
+  const autoRetrievedSignatureRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const urlSignature = new URLSearchParams(window.location.search).get('signature');
+    if (!urlSignature || !urlSignature.trim()) return;
+    if (autoRetrievedSignatureRef.current === urlSignature) return;
+    autoRetrievedSignatureRef.current = urlSignature;
+    void handleVerify(urlSignature);
+  }, [handleVerify]);
 
   const handleProofMediaFileChosen = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -297,7 +327,7 @@ export default function Viewer() {
               />
             </div>
             <button
-              onClick={handleVerify}
+              onClick={() => void handleVerify()}
               disabled={status === 'FETCHING' || status === 'VERIFYING'}
               className="w-full bg-accent text-white font-bold py-2 px-4 rounded hover:opacity-90 transition disabled:opacity-50"
             >

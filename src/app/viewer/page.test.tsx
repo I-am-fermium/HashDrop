@@ -179,12 +179,18 @@ function fakePrivateVerified(): PrivateVerificationResult {
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 
-async function renderViewer() {
+async function renderViewer(strictMode = false) {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
+  const element = React.createElement(Viewer);
   await act(async () => {
-    root!.render(React.createElement(Viewer));
+    // strictMode=true exercises React StrictMode's simulated unmount/remount
+    // (double effect invocation) — the automatic URL retrieval must still
+    // run exactly once.
+    root!.render(
+      strictMode ? React.createElement(React.StrictMode, null, element) : element
+    );
   });
 }
 
@@ -199,6 +205,15 @@ async function cleanup() {
   }
   root = null;
   container = null;
+}
+
+/**
+ * Point the shared jsdom URL at a Viewer route, e.g. setViewerUrl('?signature=…')
+ * renders as if the user opened /viewer?signature=… . beforeEach resets to a
+ * plain /viewer, so tests never leak query params into each other.
+ */
+function setViewerUrl(query = '') {
+  window.history.replaceState({}, '', `/viewer${query}`);
 }
 
 function textContent(): string {
@@ -294,6 +309,9 @@ async function selectFile(input: HTMLInputElement, file: File) {
 describe('Viewer page (/viewer) — V3 UI render path', () => {
   beforeEach(() => {
     jest.resetAllMocks();
+    // Start every test on a plain /viewer URL — tests covering the shared
+    // ?signature= entry point set their own query string before rendering.
+    window.history.replaceState({}, '', '/viewer');
   });
 
   afterEach(async () => {
@@ -769,6 +787,134 @@ describe('Viewer page (/viewer) — V3 UI render path', () => {
     // The local verification completion time stays separate from the
     // Solana blockTime shown above.
     expectVisible('Verified By HashDrop:');
+  });
+
+  // ---------------------------------------------------------------------------
+  // Shared-URL entry point: /viewer?signature=<signature> (the verification
+  // link a certificate emits). The URL value feeds the EXISTING Retrieve flow —
+  // there is no second retrieval/verification path.
+  // ---------------------------------------------------------------------------
+
+  it('shared URL: automatically runs the existing Retrieve flow with the URL signature', async () => {
+    mockGetTransaction.mockResolvedValue(fakeTxWithMemo(await publicMemo()));
+    setViewerUrl(`?signature=${SIGNATURE}`);
+
+    await renderViewer();
+
+    // The existing signature input/state is populated with the URL value
+    expect(findInputByPlaceholderPrefix('Enter Solana transaction signature').value).toBe(SIGNATURE);
+
+    // The existing handleVerify() flow performed the retrieval/verification
+    await waitFor(() => textContent().includes('Public Drop'), 'automatic retrieval result');
+    expectVisible('✓ VERIFIED');
+    expect(mockGetTransaction).toHaveBeenCalledTimes(1);
+    expect(mockGetTransaction).toHaveBeenCalledWith(SIGNATURE, {
+      commitment: 'confirmed',
+      maxSupportedTransactionVersion: 1,
+    });
+  });
+
+  it('plain /viewer: does NOT automatically retrieve anything', async () => {
+    mockGetTransaction.mockResolvedValue(fakeTxWithMemo(await publicMemo()));
+    setViewerUrl();
+
+    await renderViewer();
+    // Give any (incorrectly) scheduled automatic retrieval time to run
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(mockGetTransaction).not.toHaveBeenCalled();
+    expectNotVisible('Public Drop');
+    expect(findInputByPlaceholderPrefix('Enter Solana transaction signature').value).toBe('');
+  });
+
+  it('empty ?signature= parameter: does NOT automatically retrieve', async () => {
+    mockGetTransaction.mockResolvedValue(fakeTxWithMemo(await publicMemo()));
+    setViewerUrl('?signature=');
+
+    await renderViewer();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(mockGetTransaction).not.toHaveBeenCalled();
+    expectVisible('Retrieval Details');
+    expect(findInputByPlaceholderPrefix('Enter Solana transaction signature').value).toBe('');
+  });
+
+  it('manual Retrieve flow still works when no signature query param is present', async () => {
+    mockGetTransaction.mockResolvedValue(fakeTxWithMemo(await publicMemo()));
+    setViewerUrl();
+
+    await renderViewer();
+    // Nothing auto-ran before the user acted
+    expect(mockGetTransaction).not.toHaveBeenCalled();
+
+    setInputValue(findInputByPlaceholderPrefix('Enter Solana transaction signature'), SIGNATURE);
+    await clickButton('RETRIEVE');
+
+    expectVisible('✓ VERIFIED');
+    expect(mockGetTransaction).toHaveBeenCalledTimes(1);
+    expect(mockGetTransaction).toHaveBeenCalledWith(SIGNATURE, {
+      commitment: 'confirmed',
+      maxSupportedTransactionVersion: 1,
+    });
+  });
+
+  it('shared URL: triggers exactly ONE automatic retrieval across StrictMode and re-renders', async () => {
+    mockGetTransaction.mockResolvedValue(fakeTxWithMemo(await publicMemo()));
+    setViewerUrl(`?signature=${SIGNATURE}`);
+
+    // StrictMode simulates an unmount/remount, double-invoking effects in dev
+    await renderViewer(true);
+
+    await waitFor(() => textContent().includes('Public Drop'), 'automatic retrieval result');
+    expect(mockGetTransaction).toHaveBeenCalledTimes(1);
+
+    // Force further re-renders that change handleVerify's identity (one of its
+    // deps changed) so the URL effect re-runs — the guard must still block it.
+    setInputValue(
+      findInputByPlaceholderPrefix('Enter HashDrop ID for additional validation'),
+      'HDIDRENDERTRIGGER01'
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(mockGetTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('shared URL: certificate option becomes available exactly as with manual retrieval', async () => {
+    mockGetTransaction.mockResolvedValue(fakeTxWithMemo(await publicMemo()));
+    setViewerUrl(`?signature=${SIGNATURE}`);
+
+    await renderViewer();
+
+    await waitFor(() => textContent().includes('Public Drop'), 'automatic retrieval result');
+    expectVisible('✓ VERIFIED');
+    expectVisible('ON-CHAIN RECORD TIME');
+    expectVisible(new Date(1700000000 * 1000).toUTCString());
+    expectVisible('BLOCK SLOT');
+    expectVisible('12345');
+    expectVisible('Verification Certificate');
+    expectVisible('Generate Certificate');
+
+    await clickButton('Generate Certificate');
+    expectVisible('Certificate of Cryptographic & On-Chain Verification');
+    expectVisible('Certificate Reference:');
+    expectVisible('Download Certificate (PDF)');
+  });
+
+  it('shared URL with an invalid signature: uses the existing validation error, no RPC call', async () => {
+    setViewerUrl('?signature=invalid');
+
+    await renderViewer();
+
+    expectVisible('Invalid transaction signature format');
+    expect(mockGetTransaction).not.toHaveBeenCalled();
+    // The invalid value stays visible in the existing input for correction
+    expect(findInputByPlaceholderPrefix('Enter Solana transaction signature').value).toBe('invalid');
   });
 
 });
