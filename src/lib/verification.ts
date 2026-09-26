@@ -40,6 +40,8 @@ export interface PublicVerificationResult {
   filename?: string; // PROOF media drops: sanitized original filename from the memo
   transactionVersion?: 'legacy' | 'v0' | 'v1';
   needsContent?: boolean;
+  blockTime?: number | null; // Authoritative on-chain Unix timestamp (seconds)
+  slot?: number; // On-chain block slot
 }
 
 /**
@@ -65,6 +67,8 @@ export interface ProofVerificationResult {
   transactionVersion?: 'legacy' | 'v0' | 'v1';
   mimeType?: string; // validated MIME type (media proof payloads only)
   filename?: string; // sanitized original filename (media proof payloads only)
+  blockTime?: number | null; // Authoritative on-chain Unix timestamp (seconds)
+  slot?: number; // On-chain block slot
 }
 
 /**
@@ -94,6 +98,8 @@ export interface PrivateVerificationResult {
   version: string;
   mode: string;
   transactionVersion?: 'legacy' | 'v0' | 'v1';
+  blockTime?: number | null; // Authoritative on-chain Unix timestamp (seconds)
+  slot?: number; // On-chain block slot
 }
 
 /**
@@ -599,6 +605,8 @@ export async function verifyPublicDrop(
       version: payload.version,
       mode: payload.mode,
       transactionVersion,
+      blockTime: tx.blockTime ?? null,
+      slot: tx.slot,
     };
   } catch (error) {
     console.error('[HashDrop Retrieve] Error:', error);
@@ -888,6 +896,8 @@ export async function verifyProofDropBytes(
       mimeType: proofPayload.contentType,
       filename: proofPayload.filename,
       transactionVersion,
+      blockTime: tx.blockTime ?? null,
+      slot: tx.slot,
     };
   } catch (error) {
     console.error('[HashDrop Proof] Error:', error);
@@ -1295,6 +1305,8 @@ export async function verifyPrivateDrop(
       version: privatePayload.version,
       mode: privatePayload.mode,
       transactionVersion,
+      blockTime: tx.blockTime ?? null,
+      slot: tx.slot,
     };
   } catch (error) {
     console.error('[HashDrop Private] Error:', error);

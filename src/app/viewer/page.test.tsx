@@ -167,6 +167,8 @@ function fakePrivateVerified(): PrivateVerificationResult {
     error: null,
     version: 'v3',
     mode: 'PRIVATE',
+    blockTime: 1700000000,
+    slot: 12345,
   };
 }
 
@@ -359,7 +361,33 @@ describe('Viewer page (/viewer) — V3 UI render path', () => {
     expectVisible(SIGNATURE);
     expectVisible('View on Solana Explorer');
 
+    // On-chain record time (blockTime) + slot come straight from the
+    // verification result — no extra RPC fetch.
+    expectVisible('ON-CHAIN RECORD TIME');
+    expectVisible(new Date(1700000000 * 1000).toUTCString());
+    expectVisible('BLOCK SLOT');
+    expectVisible('12345');
+
     // Exactly one transaction fetch: the retrieval itself
+    expect(mockGetTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('PUBLIC: shows "Not available" for ON-CHAIN RECORD TIME when blockTime is null', async () => {
+    const tx = fakeTxWithMemo(await publicMemo());
+    mockGetTransaction.mockResolvedValue({ ...tx, blockTime: null });
+    await renderViewer();
+
+    setInputValue(findInputByPlaceholderPrefix('Enter Solana transaction signature'), SIGNATURE);
+    await clickButton('RETRIEVE');
+
+    expectVisible('✓ VERIFIED');
+    expectVisible('ON-CHAIN RECORD TIME');
+    expectVisible('Not available');
+    // Never substitutes another timestamp for the missing blockTime
+    expectNotVisible(new Date(1700000000 * 1000).toUTCString());
+    // Slot is still displayed from the existing result
+    expectVisible('BLOCK SLOT');
+    expectVisible('12345');
     expect(mockGetTransaction).toHaveBeenCalledTimes(1);
   });
 
@@ -652,4 +680,95 @@ describe('Viewer page (/viewer) — V3 UI render path', () => {
       maxSupportedTransactionVersion: 1,
     });
   });
+  it('PUBLIC: shows Verification Certificate option after verification and renders certificate preview', async () => {
+    mockGetTransaction.mockResolvedValue(fakeTxWithMemo(await publicMemo()));
+    await renderViewer();
+
+    setInputValue(findInputByPlaceholderPrefix('Enter Solana transaction signature'), SIGNATURE);
+    await clickButton('RETRIEVE');
+
+    expectVisible('✓ VERIFIED');
+    expectVisible('Verification Certificate');
+    expectVisible('Generate Certificate');
+
+    await clickButton('Generate Certificate');
+
+    expectVisible('Certificate of Cryptographic & On-Chain Verification');
+    expectVisible('Certificate Reference:');
+    expectVisible('Download Certificate (PDF)');
+    expectVisible('Share Certificate');
+    expectVisible('Scan to verify this record on HashDrop');
+  });
+
+  it('PROOF: shows Verification Certificate option ONLY after successful proof verification', async () => {
+    mockGetTransaction.mockResolvedValue(fakeTxWithMemo(await proofMemo()));
+    await renderViewer();
+
+    setInputValue(findInputByPlaceholderPrefix('Enter Solana transaction signature'), SIGNATURE);
+    await clickButton('RETRIEVE');
+
+    // On-chain commitment found, but not verified yet: certificate must NOT appear
+    expectVisible('✓ ON-CHAIN COMMITMENT');
+    expectNotVisible('Verification Certificate');
+
+    // Verify proof
+    setInputValue(findInputByPlaceholderPrefix('Enter the original content'), CONTENT);
+    await clickButton('VERIFY PROOF');
+
+    expectVisible('✓ VERIFIED');
+    // On-chain metadata of the proof commitment transaction (not the content)
+    expectVisible('ON-CHAIN RECORD TIME');
+    expectVisible(new Date(1700000000 * 1000).toUTCString());
+    expectVisible('BLOCK SLOT');
+    expectVisible('12345');
+    expectVisible('Verification Certificate');
+    expectVisible('Generate Certificate');
+  });
+
+  it('PRIVATE: shows Verification Certificate option ONLY after successful decryption & verification', async () => {
+    mockGetTransaction.mockResolvedValue(fakeTxWithMemo(await privateMemo()));
+    await renderViewer();
+
+    setInputValue(findInputByPlaceholderPrefix('Enter Solana transaction signature'), SIGNATURE);
+    await clickButton('RETRIEVE');
+
+    // Commitment displayed, but unverified/undecrypted: certificate must NOT appear
+    expectVisible('🔐 Private Drop');
+    expectNotVisible('Verification Certificate');
+
+    mockedImportSecretKey.mockReturnValue(new Uint8Array(2400));
+    mockedImportArtifact.mockReturnValue({
+      hashDropId: 'HDIDPRIVATE0001',
+      contentHash: 'c7c81e44fd6e14e45b43254a914e3deeaaa2712040542969debbce8440ccda8f',
+      contentSize: 18,
+      contentType: 'text/plain',
+      keyFingerprint: 'aabbccddeeff0011',
+      mlKemCiphertext: new Uint8Array(8),
+      iv: new Uint8Array(12),
+      ciphertext: new Uint8Array(16),
+    });
+    mockedVerifyPrivateDrop.mockResolvedValue(fakePrivateVerified());
+
+    setInputValue(findInputByPlaceholderPrefix('Paste artifact'), 'HASHDROP-PRIVATE-BLOB|v1|...');
+    setInputValue(findInputByPlaceholderPrefix('Paste private key'), 'HASHDROP-KEY|v1|ML-KEM-768|...');
+    await clickButton('DECRYPT & VERIFY');
+
+    expectVisible('✓ DECRYPTED & VERIFIED');
+    // Public on-chain transaction metadata only — no private material
+    expectVisible('ON-CHAIN RECORD TIME');
+    expectVisible(new Date(1700000000 * 1000).toUTCString());
+    expectVisible('BLOCK SLOT');
+    expectVisible('12345');
+    expectVisible('Verification Certificate');
+    expectVisible('Generate Certificate');
+
+    await clickButton('Generate Certificate');
+    expectVisible('Key Fingerprint:');
+    expectVisible('aabbccddeeff0011');
+    expectVisible('AES-256-GCM + ML-KEM-768 + HKDF-SHA-256');
+    // The local verification completion time stays separate from the
+    // Solana blockTime shown above.
+    expectVisible('Verified By HashDrop:');
+  });
+
 });

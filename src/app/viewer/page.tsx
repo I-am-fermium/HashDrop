@@ -21,7 +21,25 @@ import { normalizeTransactionSignature } from '../../lib/signature';
 import { classifyMimeType, isMediaMime, formatFileSize } from '../../lib/media';
 import { downloadBytesFile } from '../../lib/download';
 
+import {
+  adaptPublicVerifiedResult,
+  adaptProofVerifiedResult,
+  adaptPrivateVerifiedResult,
+} from '../../lib/certificate/adapter';
+import { VerificationCertificate } from '../../components/VerificationCertificate';
+
 type ViewerStatus = 'START' | 'FETCHING' | 'DECODING' | 'VERIFYING' | 'VERIFIED' | 'FAILED';
+
+/**
+ * Format a Solana blockTime (Unix seconds) exactly like the certificate
+ * does (`new Date(blockTime * 1000).toUTCString()`). Display-only — no RPC.
+ */
+function formatOnChainRecordTime(blockTime?: number | null): string {
+  if (typeof blockTime !== 'number' || !Number.isFinite(blockTime) || blockTime <= 0) {
+    return 'Not available';
+  }
+  return new Date(blockTime * 1000).toUTCString();
+}
 
 export default function Viewer() {
   const [hashDropId, setHashDropId] = useState('');
@@ -327,6 +345,14 @@ export default function Viewer() {
                 <div className="font-mono text-xs text-accent break-all">{publicResult.signature}</div>
               </div>
               <div>
+                <div className="text-xs text-secondary mb-1">ON-CHAIN RECORD TIME</div>
+                <div className="text-accent">{formatOnChainRecordTime(publicResult.blockTime)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-secondary mb-1">BLOCK SLOT</div>
+                <div className="text-accent">{publicResult.slot}</div>
+              </div>
+              <div>
                 <div className="text-xs text-secondary mb-1">Network</div>
                 <div className="text-accent">{getNetworkDisplay()}</div>
               </div>
@@ -336,6 +362,14 @@ export default function Viewer() {
                 View on Solana Explorer ↗
               </a>
             )}
+            {/* Verification Certificate */}
+            <div className="mt-4 pt-4 border-t border-gray-800">
+              <VerificationCertificate
+                data={adaptPublicVerifiedResult(publicResult, {
+                  networkDisplay: getNetworkDisplay(),
+                })!}
+              />
+            </div>
           </section>
         )}
 
@@ -547,14 +581,33 @@ export default function Viewer() {
                 <div className="text-xs text-secondary mb-1">Transaction Signature</div>
                 <div className="font-mono text-xs text-accent break-all">{proofResult.signature}</div>
               </div>
+              <div>
+                <div className="text-xs text-secondary mb-1">ON-CHAIN RECORD TIME</div>
+                <div className="text-accent">{formatOnChainRecordTime(proofResult.blockTime)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-secondary mb-1">BLOCK SLOT</div>
+                <div className="text-accent">{proofResult.slot}</div>
+              </div>
             </div>
             {getExplorerLink() && (
               <a href={getExplorerLink()!} target="_blank" rel="noopener noreferrer" className="inline-block mt-3 text-sm text-accent hover:text-accent/80">
                 View on Solana Explorer ↗
               </a>
             )}
+            {/* Verification Certificate */}
+            {proofResult.verified && (
+              <div className="mt-4 pt-4 border-t border-gray-800">
+                <VerificationCertificate
+                  data={adaptProofVerifiedResult(proofResult, {
+                    networkDisplay: getNetworkDisplay(),
+                  })!}
+                />
+              </div>
+            )}
           </section>
         )}
+
 
         {/* PRIVATE Drop */}
         {isPrivateDrop && !privateResult?.verified && (
@@ -757,12 +810,29 @@ export default function Viewer() {
                 <div className="text-xs text-secondary mb-1">Transaction Signature</div>
                 <div className="font-mono text-xs text-accent break-all">{privateResult.signature}</div>
               </div>
+              <div>
+                <div className="text-xs text-secondary mb-1">ON-CHAIN RECORD TIME</div>
+                <div className="text-accent">{formatOnChainRecordTime(privateResult.blockTime)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-secondary mb-1">BLOCK SLOT</div>
+                <div className="text-accent">{privateResult.slot}</div>
+              </div>
             </div>
             {getExplorerLink() && (
               <a href={getExplorerLink()!} target="_blank" rel="noopener noreferrer" className="inline-block mt-3 text-sm text-accent hover:text-accent/80">
                 View on Solana Explorer ↗
               </a>
             )}
+            {/* Verification Certificate */}
+            <div className="mt-4 pt-4 border-t border-gray-800">
+              <VerificationCertificate
+                data={adaptPrivateVerifiedResult(privateResult, {
+                  networkDisplay: getNetworkDisplay(),
+                  keyFingerprint: privateCommitment?.keyFingerprint,
+                })!}
+              />
+            </div>
           </section>
         )}
 

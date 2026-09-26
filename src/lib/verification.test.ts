@@ -18,7 +18,25 @@ describe('Verification Module', () => {
     it('should return error for non-existent transaction', async () => {
       const connection = createMockConnection();
 
-      const result = await verifyPublicDrop(connection, 'nonexistent12345678901234567890123456789012345678901234567890123456789012345678901234');
+      // This negative test INTENTIONALLY passes an invalid signature, so the
+      // RPC answers -32602 "Invalid param: Invalid" and verifyPublicDrop logs
+      // the expected error via console.error. Suppress ONLY this expected
+      // output (scoped to this test); assertions below are unchanged.
+      const consoleErrorSpy = jest
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      let result: Awaited<ReturnType<typeof verifyPublicDrop>>;
+      let errorPathExercised = false;
+      try {
+        result = await verifyPublicDrop(connection, 'nonexistent12345678901234567890123456789012345678901234567890123456789012345678901234');
+        // Captured before mockRestore() clears the recorded calls.
+        errorPathExercised = consoleErrorSpy.mock.calls.length > 0;
+      } finally {
+        consoleErrorSpy.mockRestore();
+      }
+
+      // The expected error path was still exercised (logged, now hidden).
+      expect(errorPathExercised).toBe(true);
 
       expect(result.verified).toBe(false);
       // getTransaction throws an error for invalid signatures, which is caught
@@ -47,7 +65,21 @@ describe('Verification Module', () => {
 
       const signature = 'nonexistent12345678901234567890123456789012345678901234567890123456789012345678901234';
 
-      const result = await verifyBySignature(connection, signature);
+      // Same intentionally-invalid signature as above: the resulting
+      // console.error is expected output, suppressed only for this test.
+      const consoleErrorSpy = jest
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      let result: Awaited<ReturnType<typeof verifyBySignature>>;
+      let errorPathExercised = false;
+      try {
+        result = await verifyBySignature(connection, signature);
+        // Captured before mockRestore() clears the recorded calls.
+        errorPathExercised = consoleErrorSpy.mock.calls.length > 0;
+      } finally {
+        consoleErrorSpy.mockRestore();
+      }
+      expect(errorPathExercised).toBe(true);
 
       expect(result.verified).toBe(false);
     }, 30000);
