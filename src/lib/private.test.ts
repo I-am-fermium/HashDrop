@@ -7,8 +7,11 @@ import {
   decodePrivatePayload,
   isValidPrivatePayload,
   decodeHashDropPayload,
+  detectObsoletePrivatePayload,
+  obsoletePrivateProtocolError,
   HASHDROP_PROTOCOL_VERSION,
   HASHDROP_PRIVATE_CRYPTO_VERSION,
+  HASHDROP_OBSOLETE_PRIVATE_CRYPTO_VERSIONS,
 } from './memo';
 
 describe('V3 PRIVATE Mode Protocol', () => {
@@ -127,6 +130,58 @@ describe('V3 PRIVATE Mode Protocol', () => {
       // fails at PARSE time, long before any ML-KEM/AES-GCM operation runs.
       expect(decodeHashDropPayload(privateMemo('HD-P1'))).toBeNull();
       expect(decodeHashDropPayload(privateMemo('HD-P3'))).toBeNull();
+    });
+  });
+
+  describe('obsolete PRIVATE constructions (HD-P1)', () => {
+    const hash = 'a'.repeat(64);
+
+    function privateMemo(version: string): string {
+      return `HASHDROP|v3|PRIVATE|hd_abc12345|${hash}|100|text/plain|${version}|aabbccdd11223344|ivbase64|enckeybase64`;
+    }
+
+    it('declares HD-P1 as the only obsolete construction', () => {
+      expect(HASHDROP_OBSOLETE_PRIVATE_CRYPTO_VERSIONS).toEqual(['HD-P1']);
+    });
+
+    it('detects HD-P1 so retrieval can reject it explicitly', () => {
+      expect(detectObsoletePrivatePayload(privateMemo('HD-P1'))).toBe('HD-P1');
+    });
+
+    it('does not flag HD-P2 (or any other version) as obsolete', () => {
+      expect(detectObsoletePrivatePayload(privateMemo('HD-P2'))).toBeNull();
+      expect(detectObsoletePrivatePayload(privateMemo('HD-P3'))).toBeNull();
+      expect(detectObsoletePrivatePayload(privateMemo(''))).toBeNull();
+    });
+
+    it('does not flag non-PRIVATE or malformed payloads as obsolete', () => {
+      // PUBLIC/PROOF are not PRIVATE payloads at all.
+      expect(
+        detectObsoletePrivatePayload(`HASHDROP|v3|PUBLIC|hd_x|${hash}|text/plain|1|QUJD`)
+      ).toBeNull();
+      expect(
+        detectObsoletePrivatePayload(`HASHDROP|v3|PROOF|hd_x|${hash}|1|text/plain|`)
+      ).toBeNull();
+      // Non-V3, wrong field count, and empty memos are never "obsolete PRIVATE".
+      expect(
+        detectObsoletePrivatePayload(
+          `HASHDROP|v2|PRIVATE|hd_x|${hash}|100|text/plain|HD-P1|aabbccdd11223344|iv|key`
+        )
+      ).toBeNull();
+      expect(
+        detectObsoletePrivatePayload(
+          `HASHDROP|v3|PRIVATE|hd_x|${hash}|100|text/plain|HD-P1|aabbccdd11223344|iv`
+        )
+      ).toBeNull();
+      expect(detectObsoletePrivatePayload('')).toBeNull();
+    });
+
+    it('produces an explicit unsupported-protocol message (never "valid")', () => {
+      const message = obsoletePrivateProtocolError('HD-P1');
+      expect(message).toContain('HD-P1');
+      expect(message).toContain('obsolete');
+      expect(message).toContain('HD-P2');
+      expect(message).toContain('cannot be decrypted or verified');
     });
   });
 

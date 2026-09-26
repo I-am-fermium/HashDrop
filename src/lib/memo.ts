@@ -373,6 +373,69 @@ export function isValidPrivatePayload(memo: string): boolean {
   return decodePrivatePayload(memo) !== null;
 }
 
+// ---------------------------------------------------------------------------
+// Obsolete PRIVATE constructions (HD-P1)
+// ---------------------------------------------------------------------------
+// HD-P1 was the pre-HD-P2 build of PRIVATE mode. HD-P2 changed the AES-GCM AAD
+// (the artifact object TYPE is now authenticated alongside the commitment
+// fields) and is NOT interoperable with HD-P1: an HD-P1 drop cannot be
+// decrypted or verified by HD-P2 code.
+//
+// HD-P1 is obsolete and deliberately NOT supported. There is no fallback
+// parser, no legacy AAD reconstruction, no reinterpretation and no decryption
+// attempt. It is recognised ONLY so retrieval can reject it with an explicit
+// "obsolete protocol" error instead of a generic invalid-payload error.
+export const HASHDROP_OBSOLETE_PRIVATE_CRYPTO_VERSIONS = ['HD-P1'] as const;
+
+/**
+ * Detect a structurally valid V3 PRIVATE memo that carries an OBSOLETE crypto
+ * construction (e.g. HD-P1).
+ *
+ * This never decodes, decapsulates, unwraps or decrypts anything — it only
+ * reads the cryptoVersion field of an 11-field V3 PRIVATE payload so the
+ * caller can fail closed with an explicit unsupported-protocol error.
+ *
+ * @returns the obsolete crypto version, or null when the memo is not an
+ *          obsolete PRIVATE payload
+ */
+export function detectObsoletePrivatePayload(memo: string): string | null {
+  const parts = memo.split('|');
+
+  // Same field count/shape as the canonical V3 PRIVATE payload.
+  if (parts.length !== 11) {
+    return null;
+  }
+
+  const protocol = parts[0];
+  const version = parts[1];
+  const mode = parts[2];
+  const cryptoVersion = parts[7];
+
+  if (protocol !== 'HASHDROP' || version !== 'v3' || mode !== 'PRIVATE') {
+    return null;
+  }
+
+  return (HASHDROP_OBSOLETE_PRIVATE_CRYPTO_VERSIONS as readonly string[]).includes(cryptoVersion)
+    ? cryptoVersion
+    : null;
+}
+
+/**
+ * Canonical error text for an obsolete PRIVATE construction.
+ *
+ * Shared by every retrieval path so the rejection is byte-identical wherever
+ * it surfaces (Retrieve, PRIVATE verify), and so the message can never drift
+ * into implying that an obsolete drop is merely "invalid".
+ */
+export function obsoletePrivateProtocolError(cryptoVersion: string): string {
+  return (
+    `Unsupported Private protocol: ${cryptoVersion} is obsolete. ` +
+    `HashDrop Private drops use ${HASHDROP_PRIVATE_CRYPTO_VERSION} only — a ${cryptoVersion} drop ` +
+    `cannot be decrypted or verified and is never treated as valid. ` +
+    `Re-publish the content with the current HashDrop build.`
+  );
+}
+
 /**
  * Unified V3 decoder that reads the mode discriminator and dispatches
  * to the appropriate decoder. Returns null for unrecognized payloads.

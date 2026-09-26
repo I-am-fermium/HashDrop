@@ -31,6 +31,7 @@ import {
   encryptPrivateContent,
   generateRecipientKeypair,
 } from './crypto/privateDrop';
+import * as privateDropModule from './crypto/privateDrop';
 import {
   calculateKeyFingerprint,
   exportSecretKey,
@@ -325,7 +326,7 @@ describe('PRIVATE publish → export → Viewer compatibility', () => {
     expect(result.plaintext).toBeNull();
   });
 
-  it('K: a memo with a foreign cryptoVersion (HD-P1) fails closed before decryption', async () => {
+  it('K: an obsolete HD-P1 memo is rejected explicitly and NEVER decrypted', async () => {
     const pub = await simulatePrivatePublish();
     const parts = pub.onChainMemo.split('|');
     parts[7] = 'HD-P1'; // tamper ONLY the crypto version field
@@ -334,6 +335,10 @@ describe('PRIVATE publish → export → Viewer compatibility', () => {
     const artifact = importArtifact(pub.artifactEnvelope);
     const secretKey = importSecretKey(pub.privateKeyEnvelope);
 
+    // HD-P1 is obsolete: not one crypto primitive may run (no ML-KEM
+    // decapsulation, no HKDF, no key unwrap, no AES-GCM decrypt).
+    const decryptSpy = jest.spyOn(privateDropModule, 'decryptPrivateContent');
+
     const result: PrivateVerificationResult = await verifyPrivateDrop(
       fakeConnection,
       SIGNATURE,
@@ -341,13 +346,17 @@ describe('PRIVATE publish → export → Viewer compatibility', () => {
       artifact,
       artifact.mlKemCiphertext,
       pub.meta.hashDropId
-    );
+    ).finally(() => decryptSpy.mockRestore());
 
-    // Parse failure → the memo is rejected before any ML-KEM/AES-GCM work:
-    // no verified result and no plaintext can ever be produced.
+    // Explicit unsupported/obsolete-protocol rejection — not a generic
+    // invalid-payload error, not a decryption error, and never "verified".
     expect(result.verified).toBe(false);
+    expect(result.mode).toBe('PRIVATE');
+    expect(result.error).toContain('HD-P1');
+    expect(result.error).toContain('obsolete');
     expect(result.plaintext).toBeNull();
     expect(result.plaintextBytes).toBeUndefined();
+    expect(decryptSpy).not.toHaveBeenCalled();
   });
 
   it('L: a non-canonical size memo ("0100") fails closed before decryption', async () => {

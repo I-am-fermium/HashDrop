@@ -10,7 +10,8 @@
  * DO NOT make any fixes - this is for diagnostics only.
  */
 
-import { Connection } from '@solana/web3.js';
+import { getTransactionBounded } from './solana/transactionRead';
+import { createDevnetConnection } from './rpc/devnet';
 import * as bs58 from 'bs58';
 
 // Known-good transaction from the task
@@ -24,16 +25,16 @@ describe('HashDrop Legacy V2 Retrieval Diagnostic', () => {
     console.log('='.repeat(80));
     console.log('');
 
-    // Create connection to Solana Devnet
-    const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
+    // Connection to the configured Devnet RPC (the same endpoint the app's
+    // Retrieve path uses — never a hard-coded public endpoint).
+    const connection = createDevnetConnection();
 
     // STEP 1: Fetch the known-good transaction
     console.log('[STEP 1] Fetching known-good transaction...');
     console.log(`[HD DEBUG] Transaction signature: ${KNOWN_GOOD_TX}`);
 
-    const tx = await connection.getTransaction(KNOWN_GOOD_TX, {
-      commitment: 'confirmed',
-      maxSupportedTransactionVersion: 0,
+    const tx = await getTransactionBounded(connection, KNOWN_GOOD_TX, {
+      maxSupportedTransactionVersion: 1,
     });
 
     // STEP 2: Print the actual runtime shape

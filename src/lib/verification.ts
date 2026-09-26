@@ -9,10 +9,11 @@
 import { Connection, PublicKey } from '@solana/web3.js';
 import * as bs58 from 'bs58';
 import { calculateHash, stringToBytes } from './content';
-import { decodePublicPayload, decodeProofPayload, decodePrivatePayload, isValidPublicPayload, isValidProofPayload, isValidPrivatePayload, MEMO_PROGRAM_ID, HASHDROP_PROTOCOL_VERSION } from './memo';
+import { decodePublicPayload, decodeProofPayload, decodePrivatePayload, isValidPublicPayload, isValidProofPayload, isValidPrivatePayload, detectObsoletePrivatePayload, obsoletePrivateProtocolError, MEMO_PROGRAM_ID, HASHDROP_PROTOCOL_VERSION } from './memo';
+import { getTransactionBounded } from './solana/transactionRead';
 import { base64ToUtf8, utf8ToBytes, base64ToBytes } from './encoding';
 import { classifyMimeType } from './media';
-import { getNetworkDisplay } from './network';
+import { getNetworkDisplay, getNetworkForConnection } from './network';
 
 // Handle bs58 v6+ API change - decode is now on default export
 const bs58Decode = (bs58 as any).default?.decode || (bs58 as any).decode;
@@ -248,15 +249,24 @@ export async function verifyPublicDrop(
   try {
     console.log('[HashDrop Retrieve] Signature:', signature);
 
-    // Fetch transaction - use maxSupportedTransactionVersion: 1 to support v1
-    // This allows retrieval of both v0 and v1 transactions from the network
-    const tx = await connection.getTransaction(signature, {
-      commitment: 'confirmed',
+    // Fetch transaction through the bounded read path: an unresponsive RPC
+    // (e.g. a Devnet endpoint whose long-term storage is unavailable) can no
+    // longer leave Retrieve hanging — the read times out, retries a bounded
+    // number of times, then fails closed with a retrieval error.
+    // maxSupportedTransactionVersion: 1 reads legacy, v0 and v1 transactions.
+    const tx = await getTransactionBounded(connection, signature, {
       maxSupportedTransactionVersion: 1,
     });
     
     if (!tx) {
-      const networkDisplay = getNetworkDisplay();
+      // Report the cluster that was ACTUALLY queried (derived from the
+      // Connection used for this lookup) instead of a separately-read network
+      // selection, so the diagnostic can never name a different cluster than
+      // the one that answered. Unknown endpoints fall back to the selection.
+      const queriedNetwork = getNetworkForConnection(connection);
+      const networkDisplay = queriedNetwork
+        ? getNetworkDisplay(queriedNetwork)
+        : getNetworkDisplay();
       return {
         verified: false,
         content: '',
@@ -360,6 +370,29 @@ export async function verifyPublicDrop(
     }
     
     console.log('[HashDrop Retrieve] Decoded Memo:', memoData);
+
+    // Obsolete Private protocol (HD-P1) — rejected explicitly, never parsed,
+    // decapsulated, unwrapped or decrypted. HD-P2 is the only supported
+    // Private construction and there is no legacy AAD fallback by design.
+    const obsoletePrivateVersion = detectObsoletePrivatePayload(memoData);
+    if (obsoletePrivateVersion) {
+      console.log('[HashDrop Retrieve] Rejected obsolete Private construction:', obsoletePrivateVersion);
+      return {
+        verified: false,
+        content: '',
+        hash: '',
+        hashDropId: '',
+        contentHash: '',
+        contentType: '',
+        contentSize: 0,
+        signature,
+        signer,
+        error: obsoletePrivateProtocolError(obsoletePrivateVersion),
+        version: HASHDROP_PROTOCOL_VERSION,
+        mode: 'PRIVATE',
+        transactionVersion,
+      };
+    }
 
     // Detect Proof Mode (V3) payload first
     if (isValidProofPayload(memoData)) {
@@ -635,9 +668,9 @@ export async function verifyProofDropBytes(
     // Stage 1: Fetch the transaction
     console.log('[HashDrop Proof] Fetching transaction:', signature);
 
-    const tx = await connection.getTransaction(signature, {
-      commitment: 'confirmed',
-      maxSupportedTransactionVersion: 0,
+    // Bounded read: bounded timeout + bounded retries, read-only.
+    const tx = await getTransactionBounded(connection, signature, {
+      maxSupportedTransactionVersion: 1,
     });
 
     if (!tx) {
@@ -921,9 +954,9 @@ export async function verifyPrivateDrop(
     // Stage 1: Fetch the transaction
     console.log('[HashDrop Private] Fetching transaction:', signature);
 
-    const tx = await connection.getTransaction(signature, {
-      commitment: 'confirmed',
-      maxSupportedTransactionVersion: 0,
+    // Bounded read: bounded timeout + bounded retries, read-only.
+    const tx = await getTransactionBounded(connection, signature, {
+      maxSupportedTransactionVersion: 1,
     });
 
     if (!tx) {
@@ -1033,6 +1066,34 @@ export async function verifyPrivateDrop(
     // Stage 3: Decode the memo and detect V3 PRIVATE
     console.log('[HashDrop Private] Decoded Memo:', memoData);
 
+    // Fee payer / publisher wallet address (resolved before any rejection so
+    // every result — including an obsolete-protocol rejection — names it).
+    const signer = extractAccountAddress(accountKeys?.[0]);
+
+    // Obsolete Private protocol (HD-P1) — fail closed with an explicit
+    // unsupported-protocol error BEFORE any crypto is touched. No HD-P1
+    // decryption attempt, no legacy AAD, no reinterpretation as HD-P2.
+    const obsoletePrivateVersion = detectObsoletePrivatePayload(memoData);
+    if (obsoletePrivateVersion) {
+      console.log('[HashDrop Private] Rejected obsolete Private construction:', obsoletePrivateVersion);
+      return {
+        verified: false,
+        hashDropId: '',
+        contentHash: '',
+        contentSize: 0,
+        calculatedHash: '',
+        calculatedSize: 0,
+        contentType: '',
+        plaintext: null,
+        signature,
+        signer,
+        error: obsoletePrivateProtocolError(obsoletePrivateVersion),
+        version: HASHDROP_PROTOCOL_VERSION,
+        mode: 'PRIVATE',
+        transactionVersion,
+      };
+    }
+
     if (!isValidPrivatePayload(memoData)) {
       return {
         verified: false,
@@ -1070,9 +1131,6 @@ export async function verifyPrivateDrop(
     }
 
     console.log('[HashDrop Private] Parsed V3 PRIVATE:', privatePayload);
-
-    // Fee payer / publisher wallet address
-    const signer = extractAccountAddress(accountKeys?.[0]);
 
     // Validate HashDrop ID if provided
     if (expectedHashDropId && privatePayload.hashDropId !== expectedHashDropId) {

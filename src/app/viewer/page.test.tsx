@@ -391,6 +391,30 @@ describe('Viewer page (/viewer) — V3 UI render path', () => {
     expect(mockGetTransaction).toHaveBeenCalledTimes(1);
   });
 
+  it('PROOF: a SECOND consecutive failed verification still reports its failure reason (regression)', async () => {
+    mockGetTransaction.mockResolvedValue(fakeTxWithMemo(await proofMemo()));
+    await renderViewer();
+
+    setInputValue(findInputByPlaceholderPrefix('Enter Solana transaction signature'), SIGNATURE);
+    await clickButton('RETRIEVE');
+    expectVisible('✓ ON-CHAIN COMMITMENT');
+
+    // First failure reports its reason.
+    setInputValue(findInputByPlaceholderPrefix('Enter the original content'), 'wrong content one');
+    await clickButton('VERIFY PROOF');
+    expectVisible('❌ VERIFICATION FAILED');
+    expectVisible('The supplied content does not match the on-chain commitment');
+
+    // Second failure (different supplied content) must ALSO report its reason.
+    // Before the fix the `&& !error` closure guard swallowed it: the banner was
+    // cleared at the start of the attempt and never repopulated.
+    setInputValue(findInputByPlaceholderPrefix('Enter the original content'), 'wrong content two');
+    await clickButton('VERIFY PROOF');
+    expectVisible('✕ NOT VERIFIED');
+    expectVisible('❌ VERIFICATION FAILED');
+    expectVisible('The supplied content does not match the on-chain commitment');
+  });
+
   it('PRIVATE: renders commitment + decryption UI immediately after retrieval (before any decryption), then the decrypted result', async () => {
     mockGetTransaction.mockResolvedValue(fakeTxWithMemo(await privateMemo()));
     await renderViewer();

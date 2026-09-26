@@ -40,6 +40,25 @@ export function getConnection(): Connection {
 }
 
 /**
+ * Build the RPC Connection for the selected network, failing safely when that
+ * cluster has no usable endpoint (e.g. Mainnet selected without
+ * NEXT_PUBLIC_SOLANA_MAINNET_RPC configured).
+ *
+ * Retrieve must fail with a clear configuration error instead of crashing the
+ * render tree: when this returns null the Retrieve handlers fall back to
+ * getConnection(), which throws the explicit "Mainnet RPC is not configured"
+ * error inside their own try/catch.
+ */
+function createConnectionSafe(): Connection | null {
+  try {
+    return createConnection();
+  } catch (error) {
+    console.error('[HashDrop] RPC connection unavailable:', error);
+    return null;
+  }
+}
+
+/**
  * Hook for wallet operations - uses Wallet Standard API
  * Compatible with Phantom and other Wallet Standard wallets
  */
@@ -51,6 +70,10 @@ export function useWallet(): UseWalletResult {
   const [isConnected, setIsConnected] = useState(false);
   const [connection, setConnection] = useState<Connection | null>(null);
   const walletRef = useRef<any>(null);
+  // Network the CURRENT Connection was created for. A Connection built for one
+  // cluster must never be reused after the selected network changes, otherwise
+  // Retrieve queries the wrong cluster while the UI reports the selected one.
+  const connectionNetworkRef = useRef<Network | null>(null);
 
   // After hydration, sync network state from localStorage
   // This ensures the UI reflects the user's persisted network selection
@@ -63,7 +86,8 @@ export function useWallet(): UseWalletResult {
     setNetworkState(currentNetwork);
     
     // Initialize connection with the correct network
-    const conn = createConnection();
+    connectionNetworkRef.current = currentNetwork;
+    const conn = createConnectionSafe();
     console.log('[HashDrop] Connection initialized:', {
       network: currentNetwork,
       rpc: getRpcUrlForLogging(),
@@ -71,17 +95,29 @@ export function useWallet(): UseWalletResult {
     setConnection(conn);
   }, []);
 
-  // Handle network changes - update connection when network changes
+  // Keep the RPC Connection bound to the selected network.
+  // This must rebuild in BOTH directions: the previous guard
+  // (`if (network !== 'devnet')`) skipped rebuilding when the user switched
+  // Mainnet -> Devnet, so the stale Mainnet Connection stayed in state and
+  // Retrieve queried the wrong cluster while the UI reported Devnet.
   useEffect(() => {
-    if (network !== 'devnet') { // Only run after initial hydration
-      const conn = createConnection();
-      console.log('[HashDrop] Network changed, updating connection:', {
-        oldNetwork: 'devnet',
-        newNetwork: network,
-        rpc: getRpcUrlForLogging(),
-      });
-      setConnection(conn);
+    // createConnection() resolves its endpoint from the PERSISTED selection, so
+    // this guard compares against that same source: during the first commit the
+    // `network` state is still the SSR initial value ('devnet') even though the
+    // connection was just built for the persisted network.
+    const selectedNetwork = getCurrentNetwork();
+    if (connectionNetworkRef.current === selectedNetwork) {
+      return;
     }
+    const previousNetwork = connectionNetworkRef.current;
+    connectionNetworkRef.current = selectedNetwork;
+    const conn = createConnectionSafe();
+    console.log('[HashDrop] Network changed, updating connection:', {
+      previousNetwork,
+      newNetwork: selectedNetwork,
+      rpc: getRpcUrlForLogging(),
+    });
+    setConnection(conn);
   }, [network]);
 
   // Check wallet connection status

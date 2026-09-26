@@ -173,14 +173,17 @@ export default function Viewer() {
         : await verifyProofDrop(conn, normalizedSignature, proofContent, hashDropId || undefined);
       setProofResult(result);
       setStatus(result.verified ? 'VERIFIED' : 'FAILED');
-      if (!result.verified && !error) {
+      // Always report the LATEST result. The previous `&& !error` guard read a
+      // stale `error` value from the render closure, so after one failed
+      // verification every later failure was silent (the reason was dropped).
+      if (!result.verified) {
         setError(result.error || 'Proof verification failed');
       }
     } catch (err) {
       setStatus('FAILED');
       setError(err instanceof Error ? err.message : 'Unknown error');
     }
-  }, [signature, hashDropId, connection, proofContent, proofMediaFile, publicResult, error]);
+  }, [signature, hashDropId, connection, proofContent, proofMediaFile, publicResult]);
 
   const handlePrivateVerify = useCallback(async () => {
     if (!privateArtifactEnvelope || !privateSecretKey) {
@@ -337,7 +340,11 @@ export default function Viewer() {
         )}
 
         {/* PROOF Drop */}
-        {isProofDrop && !proofResult && (
+        {/* Kept visible after a FAILED verification (mirroring the PRIVATE
+            section) so the user can correct the supplied content and retry,
+            instead of having to re-run the whole retrieval. Hidden once the
+            commitment is verified. */}
+        {isProofDrop && !proofResult?.verified && (
           <section className="bg-gray-900 rounded-lg p-4 mb-6 border border-gray-700">
             <h2 className="text-lg font-semibold mb-3 text-primary">Proof Drop</h2>
             <div className="bg-blue-900/30 border border-blue-600 rounded p-3 mb-4">

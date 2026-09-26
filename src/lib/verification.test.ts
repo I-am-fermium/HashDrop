@@ -3,11 +3,14 @@
  */
 
 import { verifyPublicDrop, verifyBySignature } from './verification';
-import { Connection } from '@solana/web3.js';
+import { createDevnetConnection } from './rpc/devnet';
 
-// Mock connection for unit tests
+// Live Devnet connection for these integration-style tests: it uses the SAME
+// configured Devnet RPC as the application (NEXT_PUBLIC_SOLANA_DEVNET_RPC when
+// set, public Devnet otherwise) instead of hard-coding a public endpoint that
+// may not serve getTransaction at all.
 const createMockConnection = () => {
-  return new Connection('https://api.devnet.solana.com', 'confirmed');
+  return createDevnetConnection();
 };
 
 describe('Verification Module', () => {

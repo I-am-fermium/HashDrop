@@ -83,6 +83,16 @@ export function createMainnetConnection(): Connection {
 }
 
 /**
+ * Get the Mainnet RPC endpoint EXACTLY as configured (API key included).
+ *
+ * Use this for anything that builds a Connection or an RPC client. Do NOT use
+ * it for logging — getMainnetRpcUrl() below redacts the key for that.
+ */
+export function getMainnetRpcEndpoint(): string {
+  return MAINNET_RPC_URL ?? '';
+}
+
+/**
  * Get the Mainnet RPC URL (for logging/debugging - redacts secrets)
  */
 export function getMainnetRpcUrl(): string {
